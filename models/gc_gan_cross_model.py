@@ -6,6 +6,7 @@ from torch.autograd import Variable
 import itertools
 import util.util as util
 from util.image_pool import ImagePool
+from util.quiver import plot_quiver
 from .base_model import BaseModel
 from . import networks
 import random
@@ -284,8 +285,10 @@ class GcGANCrossModel(BaseModel):
         
         chess_A = F.grid_sample(self.chess, (self.grid + self.flow_A)[0].unsqueeze(0))
         chess_A = util.tensor2im(chess_A.data)
+        flow_map = plot_quiver(self.flow_A[0])
 
-        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('real_B', real_B), ('fake_gc_B', fake_gc_B), ('chess_A', chess_A)])
+        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('real_B', real_B), ('fake_gc_B', fake_gc_B), ('chess_A', chess_A), ('flow_map', flow_map)])
+        
 
         return ret_visuals
 
