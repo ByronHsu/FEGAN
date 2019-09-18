@@ -36,9 +36,9 @@ class GcGANCrossModel(BaseModel):
         self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
         
-        theta = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).repeat(4, 1, 1)
-        self.grid = F.affine_grid(theta, self.input_A.shape).cuda()
-        
+        theta = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).repeat(nb, 1, 1)
+        self.grid = torch.zeros(nb, size, size, 2).cuda() #
+        self.offset = F.affine_grid(theta, self.input_A.shape).cuda()
         
         img_path = os.path.join(os.getcwd(), 'chessboard.jpg')
         img = Image.open(img_path)
@@ -171,7 +171,7 @@ class GcGANCrossModel(BaseModel):
         pred_fake = self.netD_gc_B.forward(fake_gc_B)
         loss_G_gc_AB = self.criterionGAN(pred_fake, True)*self.opt.lambda_G
 
-        lambda_CrossFlow = 10
+        lambda_CrossFlow = 0
         loss_CrossFlow = self.criterionCrossFlow(flow_A, flow_gc_A)*lambda_CrossFlow
 
         if self.opt.geometry == 'rot':
@@ -285,8 +285,8 @@ class GcGANCrossModel(BaseModel):
         
         chess_A = F.grid_sample(self.chess, (self.grid + self.flow_A)[0].unsqueeze(0))
         chess_A = util.tensor2im(chess_A.data)
-        flow_map = plot_quiver(self.flow_A[0])
-
+        flow_map = plot_quiver(self.flow_A[0] - self.offset[0])
+        print(self.flow_A[0])
         ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('real_B', real_B), ('fake_gc_B', fake_gc_B), ('chess_A', chess_A), ('flow_map', flow_map)])
         
 
