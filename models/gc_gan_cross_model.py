@@ -185,7 +185,7 @@ class GcGANCrossModel(BaseModel):
         smooth = torch.mean(gx) + torch.mean(gy)
         return smooth
     def backward_G(self):
-        loss_S = 0
+        loss_S = 0 # smooth term
 
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
         pred_fake = self.netD_B.forward(fake_B)
