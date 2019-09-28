@@ -1,1 +1,2 @@
-python3 train.py --dataroot ./datasets/fisheye_gcgan --name g_unet128_d_basic --model gc_gan_cross --batchSize 4 --which_direction BtoA --geometry rot --display_id 1 --which_model_netG unet_128 --which_model_netD basic --continue_train
+# python3 train.py --dataroot ./datasets/fisheye_gcgan --name cyclegan_with_fake2_no_idt --model cycle_gan --batchSize 4 --display_id 1 --which_model_netG resnet_6blocks --which_model_netD basic --identity 0
+python3 train.py --dataroot ./datasets/MCindoor_fisheye --name gcgan_flow_with_fake2_att_data_mc --model gc_gan_cross --batchSize 4 --display_id 1 --which_direction BtoA --which_model_netG unet_128 --which_model_netD 6_layer

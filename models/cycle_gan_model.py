@@ -105,27 +105,30 @@ class CycleGANModel(BaseModel):
     def get_image_paths(self):
         return self.image_paths
 
-    def backward_D_basic(self, netD, real, fake):
+    def backward_D_basic(self, netD, real, fake, fake2):
         # Real
         pred_real = netD(real)
         loss_D_real = self.criterionGAN(pred_real, True)
         # Fake
         pred_fake = netD(fake.detach())
         loss_D_fake = self.criterionGAN(pred_fake, False)
+        # Fake2
+        pred_fake2 = netD(fake2.detach())
+        loss_D_fake2 = self.criterionGAN(pred_fake2, False)
         # Combined loss
-        loss_D = (loss_D_real + loss_D_fake) * 0.5
+        loss_D = (loss_D_real + loss_D_fake + loss_D_fake2)
         # backward
         loss_D.backward()
         return loss_D
 
     def backward_D_A(self):
         fake_B = self.fake_B_pool.query(self.fake_B)
-        loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
+        loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B, self.real_A)
         self.loss_D_A = loss_D_A.item()
 
     def backward_D_B(self):
         fake_A = self.fake_A_pool.query(self.fake_A)
-        loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
+        loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A, self.real_B)
         self.loss_D_B = loss_D_B.item()
 
     def backward_G(self):
