@@ -35,10 +35,12 @@ class GcGANCrossModel(BaseModel):
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
         self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
+        self.true = True # torch.ones((nb, 1)).cuda()
+        self.false = False # torch.zeros((nb, 1)).cuda()
+
         
-        theta = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).repeat(nb, 1, 1)
         self.offset = torch.zeros(nb, size, size, 2).cuda() #
-        self.grid = F.affine_grid(theta, self.input_A.shape).cuda() 
+        
         
         img_path = os.path.join(os.getcwd(), 'chessboard.jpg')
         img = Image.open(img_path)
@@ -72,7 +74,7 @@ class GcGANCrossModel(BaseModel):
             self.fake_B_pool = ImagePool(opt.pool_size)
             self.fake_gc_B_pool = ImagePool(opt.pool_size)
             # define loss functions
-            self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor)
+            self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor) # torch.nn.BCEWithLogitsLoss() #
             self.criterionIdt = torch.nn.L1Loss()
             self.criterionGc = torch.nn.L1Loss()
             self.criterionCrossFlow = torch.nn.L1Loss() # constraint 1: two generated flow should be the same due to symmetry
@@ -106,29 +108,29 @@ class GcGANCrossModel(BaseModel):
     def backward_D_basic(self, netD, real, fake, netD_gc, real_gc, fake_gc):
         # Real
         pred_real = netD(real)
-        loss_D_real = self.criterionGAN(pred_real, True)
+        loss_D_real = self.criterionGAN(pred_real, self.true)
         # Fake
         pred_fake = netD(fake.detach())
-        loss_D_fake = self.criterionGAN(pred_fake, False)
+        loss_D_fake = self.criterionGAN(pred_fake, self.false)
         # Fake2
         pred_fake2 = netD(self.input_A.detach())
-        loss_D_fake2 = self.criterionGAN(pred_fake2, False)
+        loss_D_fake2 = self.criterionGAN(pred_fake2, self.false)
 
         # Combined loss
-        loss_D = (loss_D_real + loss_D_fake2) + 0 * loss_D_fake
+        loss_D = (loss_D_real + loss_D_fake2) + loss_D_fake
 
         # Real_gc
         pred_real_gc = netD_gc(real_gc)
-        loss_D_gc_real = self.criterionGAN(pred_real_gc, True)
+        loss_D_gc_real = self.criterionGAN(pred_real_gc, self.true)
         # Fake_gc
         pred_fake_gc = netD_gc(fake_gc.detach())
-        loss_D_gc_fake = self.criterionGAN(pred_fake_gc, False)
+        loss_D_gc_fake = self.criterionGAN(pred_fake_gc, self.false)
         # Fake_gc2
         pred_fake_gc2 = netD_gc(self.real_gc_A.detach())
-        loss_D_gc_fake2 = self.criterionGAN(pred_fake_gc2, False)
-        print(pred_real_gc.shape)
+        loss_D_gc_fake2 = self.criterionGAN(pred_fake_gc2, self.false)
+        # print(pred_real_gc.shape)
         # Combined loss
-        loss_D += (loss_D_gc_real + loss_D_gc_fake2) + 0 * loss_D_gc_fake
+        loss_D += ((loss_D_gc_real + loss_D_gc_fake2) + loss_D_gc_fake)
 
         # backward
         loss_D.backward()
@@ -173,6 +175,8 @@ class GcGANCrossModel(BaseModel):
         # input()
         flow = F.upsample(flow, scale_factor=2).permute(0, 2, 3, 1)
         # print(flow.shape, real_down.shape)
+        self.theta = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).repeat(self.input_A.shape[0], 1, 1)
+        self.grid = F.affine_grid(self.theta, self.input_A.shape).cuda() 
         fake = F.grid_sample(real, flow + self.grid, padding_mode="reflection")
         return (fake, flow)
     def cal_smooth(self, flow):
@@ -185,12 +189,12 @@ class GcGANCrossModel(BaseModel):
 
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
         pred_fake = self.netD_B.forward(fake_B)
-        loss_G_AB = self.criterionGAN(pred_fake, True)*self.opt.lambda_G
+        loss_G_AB = self.criterionGAN(pred_fake, self.true)*self.opt.lambda_G
         loss_S += self.cal_smooth(flow_A)
 
         fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
         pred_fake = self.netD_gc_B.forward(fake_gc_B)
-        loss_G_gc_AB = self.criterionGAN(pred_fake, True)*self.opt.lambda_G
+        loss_G_gc_AB = self.criterionGAN(pred_fake, self.true)*self.opt.lambda_G
         loss_S += self.cal_smooth(flow_gc_A)
 
         lambda_CrossFlow = 0
