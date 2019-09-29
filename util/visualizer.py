@@ -117,9 +117,17 @@ class Visualizer():
                 opts=opts,
                 win=self.display_id)
         else:
-            plt.plot(X=np.stack([np.array(self.plot_data['X'])] * len(self.plot_data['legend']), 1),
-                Y=np.array(self.plot_data['Y']), **opts)
+            
+            plt.figure()
+            plt.title(opts['title'])
+            plt.xlabel(opts['xlabel'])
+            plt.ylabel(opts['ylabel'])
+            x = np.stack([np.array(self.plot_data['X'])] * len(self.plot_data['legend']), 1)
+            y = np.array(self.plot_data['Y'])
+            plt.plot(x, y, label = opts['legend'])
+            plt.legend(labels = opts['legend'])
             plt.savefig('loss.png')
+            plt.close()
             
 
     # errors: same format as |errors| of plotCurrentErrors
