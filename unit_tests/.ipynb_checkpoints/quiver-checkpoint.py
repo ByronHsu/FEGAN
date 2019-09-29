@@ -33,4 +33,3 @@ def plot_quiver(flow, n_sample = 30, _range = [-1, 1]):
     #plt.savefig('test.png')
     plt.close()
     return data
-

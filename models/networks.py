@@ -418,6 +418,7 @@ class UnetSkipConnectionBlock(nn.Module):
             upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
                                         kernel_size=4, stride=2,
                                         padding=1, bias=use_bias)
+            # Self attention layer to add global information
             att = Self_Attn(outer_nc, 'relu')
             down = [downrelu, downconv, downnorm]
             up = [uprelu, upconv, upnorm, att] # add att after up conv
@@ -480,6 +481,7 @@ class NLayerDiscriminator(nn.Module):
             sequence += [nn.Sigmoid()]
 
         self.model = nn.Sequential(*sequence)
+        # This FCN is a modified version to the original PatchGAN.
         self.fc = nn.Sequential(
             nn.Linear(512 * 7 * 7, 1024),
             nn.Linear(1024, 1)
