@@ -7,7 +7,7 @@ from torch.optim import lr_scheduler
 import numpy as np
 import torch.nn.functional as F
 from torch.autograd import Variable
-from .utils import load_state_dict_from_url
+
 ###############################################################################
 # Functions
 ###############################################################################

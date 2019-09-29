@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms 
 from PIL import Image
 
+torch.autograd.set_detect_anomaly(True)
 class GcGANCrossModel(BaseModel):
     def name(self):
         return 'GcGANCrossModel'
@@ -79,7 +80,7 @@ class GcGANCrossModel(BaseModel):
             self.criterionGc = torch.nn.L1Loss()
             self.criterionCrossFlow = torch.nn.L1Loss() # constraint 1: two generated flow should be the same due to symmetry
             # initialize optimizers
-            self.critetionSelfFlow = self.selfFlowLoss
+            
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_AB.parameters(), self.netG_gc_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D_B = torch.optim.Adam(itertools.chain(self.netD_B.parameters(), self.netD_gc_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
 
@@ -170,7 +171,7 @@ class GcGANCrossModel(BaseModel):
           raise ValueError("Geometry transformation function [%s] not recognized." % opt.geometry)
         
     def forward_G_basic(self, netG, real):
-        real_down = F.upsample(real, scale_factor=0.5)
+        real_down = F.interpolate(real, scale_factor=0.5)
         # print(real_down.shape)
         flow = netG.forward(real_down)
         # print(flow.shape)
@@ -197,37 +198,37 @@ class GcGANCrossModel(BaseModel):
         '''
         def normalize_flow(flow):
             norm = torch.sqrt(flow[:, :, :, 0] ** 2 + flow[:, :, :, 1] ** 2)
-            flow /= norm.unsqueeze(3).repeat(1, 1, 1, 2)
-            return flow
+            flow_u = flow / norm.unsqueeze(3).repeat(1, 1, 1, 2)
+            return flow_u
 
         n, h, w, _ = flow.shape
         x = torch.arange(0, h, dtype = torch.float).unsqueeze(1).repeat(1, w) - (h - 1) / 2
         y = torch.arange(0, w, dtype = torch.float).unsqueeze(0).repeat(h, 1) - (w - 1) / 2
         v = torch.cat((x.unsqueeze(2), y.unsqueeze(2)), dim = 2).unsqueeze(0).repeat(n, 1, 1, 1)
-        v = normalize_flow(v) # Normalize to unit vectors
-        flow = normalize_flow(flow) # Normalize to unit vectors
-        inner_product = torch.mul(v[:, :, :, 0], flow[:, :, :, 0]) + torch.mul(v[:, :, :, 1], flow[:, :, :, 1]) - 1 # Same direction
-        radial_loss = torch.sum(inner_product.view(n, -1), dim = 1)
-        return torch.mean(radial_loss)
+        v_u = normalize_flow(v).cuda() # Normalize to unit vectors
+        
+        flow_u = normalize_flow(flow) # Normalize to unit vectors
+        inner_product = torch.mul(v_u[:, :, :, 0], flow_u[:, :, :, 0]) + torch.mul(v_u[:, :, :, 1], flow_u[:, :, :, 1]) + 1 # opposite direction (inwards)
+        radial_loss = torch.sum(torch.abs(inner_product)) / (n * h * w * 2)
+        return radial_loss
     
     def selfFlowLoss(self, flow):
-        return self.radial_constraint(self, flow)
+        return self.radial_constraint(flow)
     
     def backward_G(self):
         
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
         pred_fake = self.netD_B.forward(fake_B)
         loss_G_AB = self.criterionGAN(pred_fake, self.true)*self.opt.lambda_G
-        loss_smooth += self.cal_smooth(flow_A)
 
         fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
         pred_fake = self.netD_gc_B.forward(fake_gc_B)
         loss_G_gc_AB = self.criterionGAN(pred_fake, self.true)*self.opt.lambda_G
-        loss_smooth += self.cal_smooth(flow_gc_A)
 
+        # Constraints for flow map
         loss_crossflow = self.criterionCrossFlow(flow_A, flow_gc_A)*self.opt.lambda_crossflow
         loss_smooth = (self.cal_smooth(flow_A) + self.cal_smooth(flow_gc_A)) * self.opt.lambda_smooth
-        loss_selfflow = (self.criterionSelfFlow(flow_A) + self.criterionSelfFLow(flow_gc_A)) * self.opt.lambda_selfflow
+        loss_selfflow = (self.selfFlowLoss(flow_A) + self.selfFlowLoss(flow_gc_A)) * self.opt.lambda_selfflow
         
         if self.opt.geometry == 'rot':
             loss_gc = self.get_gc_rot_loss(fake_B, fake_gc_B, 0)
@@ -238,11 +239,11 @@ class GcGANCrossModel(BaseModel):
             # G_AB should be identity if real_B is fed.
             idt_A, flow = self.forward_G_basic(self.netG_AB, self.real_B)
             loss_idt = self.criterionIdt(idt_A, self.real_B) * self.opt.lambda_AB * self.opt.identity
-            loss_S += self.cal_smooth(flow)
+            #loss_s += self.cal_smooth(flow)
 
             idt_gc_A, flow = self.forward_G_basic(self.netG_gc_AB, self.real_gc_B)
             loss_idt_gc = self.criterionIdt(idt_gc_A, self.real_gc_B) * self.opt.lambda_AB * self.opt.identity
-            loss_S += self.cal_smooth(flow)
+            #loss_s += self.cal_smooth(flow)
 
             self.idt_A = idt_A.data
             self.idt_gc_A = idt_gc_A.data
@@ -269,7 +270,7 @@ class GcGANCrossModel(BaseModel):
         self.loss_gc = loss_gc.item()
         self.loss_crossflow = loss_crossflow.item()
         self.loss_selfflow = loss_selfflow.item()
-        self.loss_smooth = loss_s.item()
+        self.loss_smooth = loss_smooth.item()
 
     def get_gc_rot_loss(self, AB, AB_gc, direction):
         loss_gc = 0.0
