@@ -47,7 +47,7 @@ for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
         print('saving the model at the end of epoch %d, iters %d' %
               (epoch, total_steps))
         model.save('latest')
-        if epoch >= 50:
+        if epoch >= opt.start_save:
             model.save(epoch)
 
     print('End of epoch %d / %d \t Time Taken: %d sec' %

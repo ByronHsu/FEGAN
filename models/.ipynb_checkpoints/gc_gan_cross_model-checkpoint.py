@@ -34,8 +34,9 @@ class GcGANCrossModel(BaseModel):
 
         self.netG_AB = networks.define_G(opt.input_nc, flow_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
-        self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc,
-                                        opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
+        self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc, opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
+        # self.netG_gc_AB = self.netG_AB # share
+
         self.true = True # torch.ones((nb, 1)).cuda()
         self.false = False # torch.zeros((nb, 1)).cuda()
 
@@ -79,9 +80,12 @@ class GcGANCrossModel(BaseModel):
             self.criterionIdt = torch.nn.L1Loss()
             self.criterionGc = torch.nn.L1Loss()
             self.criterionCrossFlow = torch.nn.L1Loss() # constraint 1: two generated flow should be the same due to symmetry
+            self.criterionRotFlow = torch.nn.L1Loss()
             # initialize optimizers
             
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_AB.parameters(), self.netG_gc_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            # share
+            # self.optimizer_G = torch.optim.Adam(self.netG_AB.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D_B = torch.optim.Adam(itertools.chain(self.netD_B.parameters(), self.netD_gc_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
 
             self.optimizers = []
@@ -174,13 +178,14 @@ class GcGANCrossModel(BaseModel):
         real_down = F.interpolate(real, scale_factor=0.5)
         # print(real_down.shape)
         flow = netG.forward(real_down)
-        # print(flow.shape)
+        # flow = netG.forward(real).permute(0, 2, 3, 1)
+        # print('flow', flow.shape)
         # input()
         flow = F.upsample(flow, scale_factor=2).permute(0, 2, 3, 1)
         # print(flow.shape, real_down.shape)
         self.theta = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).repeat(self.input_A.shape[0], 1, 1)
         self.grid = F.affine_grid(self.theta, self.input_A.shape).cuda() 
-        fake = F.grid_sample(real, flow + self.grid, padding_mode="reflection")
+        fake = F.grid_sample(real, flow + self.grid, padding_mode="zeros")
         return (fake, flow)
     
     def cal_smooth(self, flow):
@@ -196,22 +201,29 @@ class GcGANCrossModel(BaseModel):
         '''
             Flow map has dimension (n, h, w, 2).
         '''
-        def normalize_flow(flow):
-            norm = torch.sqrt(flow[:, :, :, 0] ** 2 + flow[:, :, :, 1] ** 2)
-            flow_u = flow / norm.unsqueeze(3).repeat(1, 1, 1, 2)
-            return flow_u
-
         n, h, w, _ = flow.shape
         x = torch.arange(0, h, dtype = torch.float).unsqueeze(1).repeat(1, w) - (h - 1) / 2
         y = torch.arange(0, w, dtype = torch.float).unsqueeze(0).repeat(h, 1) - (w - 1) / 2
-        v = torch.cat((x.unsqueeze(2), y.unsqueeze(2)), dim = 2).unsqueeze(0).repeat(n, 1, 1, 1)
-        v_u = normalize_flow(v).cuda() # Normalize to unit vectors
+        v = torch.cat((y.unsqueeze(2), x.unsqueeze(2)), dim = 2).unsqueeze(0).repeat(n, 1, 1, 1).cuda()
         
-        flow_u = normalize_flow(flow) # Normalize to unit vectors
-        inner_product = torch.mul(v_u[:, :, :, 0], flow_u[:, :, :, 0]) + torch.mul(v_u[:, :, :, 1], flow_u[:, :, :, 1]) + 1 # opposite direction (inwards)
-        radial_loss = torch.sum(torch.abs(inner_product)) / (n * h * w * 2)
+        v = v.view(n, h*w, 2)
+        flow = flow.view(n, h*w, 2)
+        
+        cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
+        cos_similarity = torch.abs(torch.abs(cos(v, flow)) - 1)
+        radial_loss = torch.mean(cos_similarity)
         return radial_loss
-    
+
+    def rotation_constraint(self, flow):
+        flow = flow.permute(0, 3, 1, 2)
+        rot90_flow = self.rot90(flow, 0)
+        rot180_flow = self.rot90(rot90_flow, 0)
+        rot270_flow = self.rot90(rot180_flow, 0)
+
+        criterion = self.criterionRotFlow
+        rot_loss = (criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)) / 3
+        return rot_loss
+
     def selfFlowLoss(self, flow):
         return self.radial_constraint(flow)
     
@@ -229,7 +241,7 @@ class GcGANCrossModel(BaseModel):
         loss_crossflow = self.criterionCrossFlow(flow_A, flow_gc_A)*self.opt.lambda_crossflow
         loss_smooth = (self.cal_smooth(flow_A) + self.cal_smooth(flow_gc_A)) * self.opt.lambda_smooth
         loss_selfflow = (self.selfFlowLoss(flow_A) + self.selfFlowLoss(flow_gc_A)) * self.opt.lambda_selfflow
-        
+        loss_rotflow = (self.rotation_constraint(flow_A) + self.rotation_constraint(flow_gc_A)) * self.opt.lambda_rot
         if self.opt.geometry == 'rot':
             loss_gc = self.get_gc_rot_loss(fake_B, fake_gc_B, 0)
         elif self.opt.geometry == 'vf':
@@ -271,6 +283,7 @@ class GcGANCrossModel(BaseModel):
         self.loss_crossflow = loss_crossflow.item()
         self.loss_selfflow = loss_selfflow.item()
         self.loss_smooth = loss_smooth.item()
+        self.loss_rotflow = loss_rotflow.item()
 
     def get_gc_rot_loss(self, AB, AB_gc, direction):
         loss_gc = 0.0
@@ -326,7 +339,8 @@ class GcGANCrossModel(BaseModel):
     def get_current_errors(self):
         ret_errors = OrderedDict([('D_B', self.loss_D_B), ('G_AB', self.loss_G_AB),
                                   ('Gc', self.loss_gc), ('G_gc_AB', self.loss_G_gc_AB), ('Smooth', self.loss_smooth),
-                                  ('Crossflow', self.loss_crossflow), ('Self-flow', self.loss_selfflow)])
+                                  ('Crossflow', self.loss_crossflow), ('Self-flow', self.loss_selfflow), 
+                                  ('Rotation-flow', self.loss_rotflow)])
 
         if self.opt.identity > 0.0:
             ret_errors['idt'] = self.loss_idt
@@ -344,12 +358,14 @@ class GcGANCrossModel(BaseModel):
         
         chess_A = F.grid_sample(self.chess, (self.flow_A + self.grid)[0].unsqueeze(0))
         chess_A = util.tensor2im(chess_A.data)
-        flow_map = plot_quiver((self.flow_A + self.grid)[0] - self.grid[0])
+        
+        flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
+        # print(self.flow_A[0] + self.grid[0])
         ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('real_B', real_B), ('fake_gc_B', fake_gc_B), ('chess_A', chess_A), ('flow_map', flow_map)])
         
 
         return ret_visuals
-
+ 
     def save(self, label):
         self.save_network(self.netG_AB, 'G_AB', label, self.gpu_ids)
         self.save_network(self.netG_AB, 'G_gc_AB', label, self.gpu_ids)

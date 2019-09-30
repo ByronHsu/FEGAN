@@ -210,9 +210,9 @@ class GcGANCrossModel(BaseModel):
         flow = flow.view(n, h*w, 2)
         
         cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
-        cos_similarity = torch.abs(cos(v, flow))
+        cos_similarity = torch.abs(torch.abs(cos(v, flow)) - 1)
         radial_loss = torch.mean(cos_similarity)
-        return -radial_loss
+        return radial_loss
 
     def rotation_constraint(self, flow):
         flow = flow.permute(0, 3, 1, 2)
@@ -221,7 +221,7 @@ class GcGANCrossModel(BaseModel):
         rot270_flow = self.rot90(rot180_flow, 0)
 
         criterion = self.criterionRotFlow
-        rot_loss = criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)
+        rot_loss = (criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)) / 3
         return rot_loss
 
     def selfFlowLoss(self, flow):
