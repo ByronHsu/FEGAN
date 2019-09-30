@@ -239,11 +239,11 @@ class GcGANCrossModel(BaseModel):
             # G_AB should be identity if real_B is fed.
             idt_A, flow = self.forward_G_basic(self.netG_AB, self.real_B)
             loss_idt = self.criterionIdt(idt_A, self.real_B) * self.opt.lambda_AB * self.opt.identity
-            #loss_s += self.cal_smooth(flow)
+            loss_smooth += self.cal_smooth(flow) * self.opt.lambda_smooth
 
             idt_gc_A, flow = self.forward_G_basic(self.netG_gc_AB, self.real_gc_B)
             loss_idt_gc = self.criterionIdt(idt_gc_A, self.real_gc_B) * self.opt.lambda_AB * self.opt.identity
-            #loss_s += self.cal_smooth(flow)
+            loss_smooth += self.cal_smooth(flow) * self.opt.lambda_smooth
 
             self.idt_A = idt_A.data
             self.idt_gc_A = idt_gc_A.data
