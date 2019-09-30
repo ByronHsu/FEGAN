@@ -24,7 +24,7 @@ def plot_quiver(flow, n_sample = 30, _range = [-1, 1]):
     x_indexs, y_indexs = np.meshgrid(indexs, indexs)
     U, V = flow[x_indexs, y_indexs, 0], flow[x_indexs, y_indexs, 1]
     fig, ax = plt.subplots()
-    ax.quiver(X, Y, U, V, width = 0.003)
+    ax.quiver(X, Y, V, U, width = 0.003)
     plt.axis('square')
     fig.canvas.draw()
     

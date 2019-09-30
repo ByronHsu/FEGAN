@@ -21,6 +21,8 @@ def radial_constraint(flow):
     n, h, w, _ = flow.shape
     x = torch.arange(0, h, dtype = torch.float).unsqueeze(1).repeat(1, w) - (h - 1) / 2
     y = torch.arange(0, w, dtype = torch.float).unsqueeze(0).repeat(h, 1) - (w - 1) / 2
+    print(x)
+    print(y)
     v = torch.cat((x.unsqueeze(2), y.unsqueeze(2)), dim = 2).unsqueeze(0).repeat(n, 1, 1, 1)
     v = normalize_flow(v)
     flow = normalize_flow(flow)
@@ -29,10 +31,9 @@ def radial_constraint(flow):
     return torch.mean(radial_loss)
     
     
-h = 20
-w = 30
+h = 5
+w = 5
 n = 5
 
 flow = torch.randn((n, h, w, 2))
 loss = radial_constraint(flow)
-print(torch.mean(torch.ones(5)))

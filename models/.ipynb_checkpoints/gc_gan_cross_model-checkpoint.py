@@ -202,14 +202,14 @@ class GcGANCrossModel(BaseModel):
             return flow_u
 
         n, h, w, _ = flow.shape
-        x = torch.arange(0, h, dtype = torch.float).unsqueeze(1).repeat(1, w) - (h - 1) / 2
-        y = torch.arange(0, w, dtype = torch.float).unsqueeze(0).repeat(h, 1) - (w - 1) / 2
+        y = torch.arange(0, h, dtype = torch.float).unsqueeze(1).repeat(1, w) - (h - 1) / 2
+        x = torch.arange(0, w, dtype = torch.float).unsqueeze(0).repeat(h, 1) - (w - 1) / 2
         v = torch.cat((x.unsqueeze(2), y.unsqueeze(2)), dim = 2).unsqueeze(0).repeat(n, 1, 1, 1)
         v_u = normalize_flow(v).cuda() # Normalize to unit vectors
         
         flow_u = normalize_flow(flow) # Normalize to unit vectors
-        inner_product = torch.mul(v_u[:, :, :, 0], flow_u[:, :, :, 0]) + torch.mul(v_u[:, :, :, 1], flow_u[:, :, :, 1]) + 1 # opposite direction (inwards)
-        radial_loss = torch.sum(torch.abs(inner_product)) / (n * h * w * 2)
+        inner_product = torch.abs(torch.mul(v_u[:, :, :, 0], flow_u[:, :, :, 0]) + torch.mul(v_u[:, :, :, 1], flow_u[:, :, :, 1])) # points radially, inner product should be +- 1
+        radial_loss = torch.sum(torch.abs(inner_product - 1)) / (n * h * w * 2)
         return radial_loss
     
     def selfFlowLoss(self, flow):
