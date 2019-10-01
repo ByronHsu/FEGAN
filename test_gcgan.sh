@@ -1,1 +1,4 @@
-python test.py --dataroot ./datasets/cityscapes --name parsing2city_rot --model gc_gan_share --no_dropout --loadSize 144 --fineSize 144 --which_model_netG resnet_6blocks --batchSize 1 --gpu_ids 0 --which_direction BtoA --geometry rot
+# free
+python3 test.py --dataroot ./datasets/MCindoor_fisheye --name tmp --model gc_gan_cross --no_dropout --which_model_netG unet_128 --batchSize 1 --which_direction BtoA --geometry rot --which_epoch 60
+# radial
+python3 test.py --dataroot ./datasets/MCindoor_fisheye --name 10_01_0044 --model gc_gan_cross --no_dropout --which_model_netG unet_128 --batchSize 1 --which_direction BtoA --geometry rot --which_epoch 60
