@@ -221,7 +221,7 @@ class GcGANCrossModel(BaseModel):
         rot270_flow = self.rot90(rot180_flow, 0)
 
         criterion = self.criterionRotFlow
-        rot_loss = (criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)) / 3
+        rot_loss = (criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow))
         return rot_loss
 
     def selfFlowLoss(self, flow):
@@ -361,7 +361,14 @@ class GcGANCrossModel(BaseModel):
         
         flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
         # print(self.flow_A[0] + self.grid[0])
-        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('real_B', real_B), ('fake_gc_B', fake_gc_B), ('chess_A', chess_A), ('flow_map', flow_map)])
+        ret_visuals = OrderedDict([
+            ('real_A', real_A), 
+            ('fake_B', fake_B), 
+            #('real_B', real_B), 
+            #('fake_gc_B', fake_gc_B), 
+            ('chess_A', chess_A), 
+            ('flow_map', flow_map)
+        ])
         
 
         return ret_visuals
