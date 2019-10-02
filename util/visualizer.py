@@ -110,12 +110,12 @@ class Visualizer():
                 'xlabel': 'epoch',
                 'ylabel': 'loss'
         }
-
-        self.vis.line(
-            X=np.stack([np.array(self.plot_data['X'])] * len(self.plot_data['legend']), 1),
-            Y=np.array(self.plot_data['Y']),
-            opts=opts,
-            win=self.display_id)
+        if self.display_id > 0:
+            self.vis.line(
+                X=np.stack([np.array(self.plot_data['X'])] * len(self.plot_data['legend']), 1),
+                Y=np.array(self.plot_data['Y']),
+                opts=opts,
+                win=self.display_id)
 
         plt.figure()
         plt.title(opts['title'])

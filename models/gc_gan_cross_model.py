@@ -252,7 +252,7 @@ class GcGANCrossModel(BaseModel):
         loss_crossflow = self.criterionCrossFlow(flow_A, flow_gc_A)*self.opt.lambda_crossflow
         loss_smooth = (self.cal_smooth(flow_A) + self.cal_smooth(flow_gc_A)) * self.opt.lambda_smooth
         loss_selfflow = (self.selfFlowLoss(flow_A) + self.selfFlowLoss(flow_gc_A)) * self.opt.lambda_selfflow
-        loss_rotflow = torch.tensor([0]) #(self.rotation_constraint(flow_A) + self.rotation_constraint(flow_gc_A)) * self.opt.lambda_rot
+        loss_rotflow = (self.rotation_constraint(flow_A) + self.rotation_constraint(flow_gc_A)) * self.opt.lambda_rot
         if self.opt.geometry == 'rot':
             loss_gc = self.get_gc_rot_loss(fake_B, fake_gc_B, 0)
         elif self.opt.geometry == 'vf':
@@ -278,7 +278,7 @@ class GcGANCrossModel(BaseModel):
             self.loss_idt = 0
             self.loss_idt_gc = 0
 
-        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_selfflow + loss_smooth
+        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_selfflow + loss_smooth + loss_rotflow
 
         loss_G.backward()
 

@@ -35,7 +35,7 @@ class Visualizer():
         self.saved = False
 
     # |visuals|: dictionary of images to display or save
-    def display_current_results(self, visuals, epoch, save_result):
+    def display_current_results(self, visuals, epoch, _iter, save_result):
         if self.display_id > 0:  # show images in the browser
             ncols = self.opt.display_single_pane_ncols
             if ncols > 0:
@@ -116,18 +116,17 @@ class Visualizer():
                 Y=np.array(self.plot_data['Y']),
                 opts=opts,
                 win=self.display_id)
-        else:
-            
-            plt.figure()
-            plt.title(opts['title'])
-            plt.xlabel(opts['xlabel'])
-            plt.ylabel(opts['ylabel'])
-            x = np.stack([np.array(self.plot_data['X'])] * len(self.plot_data['legend']), 1)
-            y = np.array(self.plot_data['Y'])
-            plt.plot(x, y, label = opts['legend'])
-            plt.legend(labels = opts['legend'])
-            plt.savefig('loss.png')
-            plt.close()
+
+        plt.figure()
+        plt.title(opts['title'])
+        plt.xlabel(opts['xlabel'])
+        plt.ylabel(opts['ylabel'])
+        x = np.stack([np.array(self.plot_data['X'])] * len(self.plot_data['legend']), 1)
+        y = np.array(self.plot_data['Y'])
+        plt.plot(x, y, label = opts['legend'])
+        plt.legend(labels = opts['legend'])
+        plt.savefig(os.path.join(self.img_dir, 'loss.png'))
+        plt.close()
             
 
     # errors: same format as |errors| of plotCurrentErrors
