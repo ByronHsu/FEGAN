@@ -14,8 +14,11 @@
   - add inter flow constraint(the flow should point to the center)
 - fix test script
 ## TODO
-1. 把flow rot90deg 
-2. MCindoor 加上sign 為了讓他學中心
-3. 存real_A fake_B chess flow就好
+1. 把flow rot90deg (byron)
+2. MCindoor 加上sign 為了讓他學中心 (byron)
+3. 存real_A fake_B chess flow就好(o)
+4. 用房間的dataset (brian)
+5. transformation用多種(ex rot 90, 180...), dis share lsun上半部都是天空學不起來 -> 增加rotation, gen share (brian)
+
 ## dataset
 - MCindoor_fisheye: https://drive.google.com/drive/folders/1I9LpS8N5_z8ke_AT2zI6UVccm9vW21By?usp=sharing

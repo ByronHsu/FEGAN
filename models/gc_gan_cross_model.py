@@ -34,16 +34,15 @@ class GcGANCrossModel(BaseModel):
 
         self.netG_AB = networks.define_G(opt.input_nc, flow_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
-        self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc, opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
-        # self.netG_gc_AB = self.netG_AB # share
-
-        self.true = True # torch.ones((nb, 1)).cuda()
-        self.false = False # torch.zeros((nb, 1)).cuda()
-
         
-        self.offset = torch.zeros(nb, size, size, 2).cuda() #
+        if opt.GD_share:
+            self.netG_gc_AB = self.netG_AB # share
+        else:
+            self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc, opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
         
-        
+        self.true = True
+        self.false = False
+                
         img_path = os.path.join(os.getcwd(), 'chessboard.jpg')
         img = Image.open(img_path)
         
@@ -59,9 +58,12 @@ class GcGANCrossModel(BaseModel):
             self.netD_B = networks.define_D(opt.output_nc, opt.ndf,
                                             opt.which_model_netD,
                                             opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
-            self.netD_gc_B = networks.define_D(opt.output_nc, opt.ndf,
-                                               opt.which_model_netD,
-                                               opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
+            if opt.GD_share:
+                self.netD_gc_B = self.netD_B
+            else:
+                self.netD_gc_B = networks.define_D(opt.output_nc, opt.ndf,
+                                                opt.which_model_netD,
+                                                opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
 
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
@@ -83,10 +85,12 @@ class GcGANCrossModel(BaseModel):
             self.criterionRotFlow = torch.nn.L1Loss()
             # initialize optimizers
             
-            self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_AB.parameters(), self.netG_gc_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            # share
-            # self.optimizer_G = torch.optim.Adam(self.netG_AB.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_D_B = torch.optim.Adam(itertools.chain(self.netD_B.parameters(), self.netD_gc_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            if opt.GD_share:
+                self.optimizer_G = torch.optim.Adam((self.netG_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+                self.optimizer_D_B = torch.optim.Adam((self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            else:
+                self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_AB.parameters(), self.netG_gc_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+                self.optimizer_D_B = torch.optim.Adam(itertools.chain(self.netD_B.parameters(), self.netD_gc_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
 
             self.optimizers = []
             self.schedulers = []
@@ -284,7 +288,13 @@ class GcGANCrossModel(BaseModel):
         self.loss_selfflow = loss_selfflow.item()
         self.loss_smooth = loss_smooth.item()
         self.loss_rotflow = loss_rotflow.item()
-
+        # for param in self.netG_AB.parameters():
+        #     print(param.data)
+        #     break
+        # for param in self.netG_gc_AB.parameters():
+        #     print(param.data)
+        #     break
+        # input()
     def get_gc_rot_loss(self, AB, AB_gc, direction):
         loss_gc = 0.0
 
@@ -311,10 +321,10 @@ class GcGANCrossModel(BaseModel):
 
         AB_gt = torch.index_select(AB_gc.clone().detach(), 2, inv_idx)
         loss_gc = self.criterionGc(AB, AB_gt)
-
+        
         AB_gc_gt = torch.index_select(AB.clone().detach(), 2, inv_idx)
         loss_gc += self.criterionGc(AB_gc, AB_gc_gt)
-
+        
         loss_gc = loss_gc*self.opt.lambda_AB*self.opt.lambda_gc
         return loss_gc
 
@@ -361,7 +371,7 @@ class GcGANCrossModel(BaseModel):
         
         flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
         # print(self.flow_A[0] + self.grid[0])
-        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('real_B', real_B), ('chess_A', chess_A), ('flow_map', flow_map)])
+        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('chess_A', chess_A), ('flow_map', flow_map)])
         
 
         return ret_visuals
