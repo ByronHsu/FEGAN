@@ -267,7 +267,7 @@ class GcGANCrossModel(BaseModel):
             self.loss_idt = 0
             self.loss_idt_gc = 0
 
-        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_selfflow + loss_smooth
+        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_selfflow + loss_smooth + loss_rotflow
 
         loss_G.backward()
 
@@ -361,26 +361,25 @@ class GcGANCrossModel(BaseModel):
         
         flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
         # print(self.flow_A[0] + self.grid[0])
-        ret_visuals = OrderedDict([
-            ('real_A', real_A), 
-            ('fake_B', fake_B), 
-            #('real_B', real_B), 
-            #('fake_gc_B', fake_gc_B), 
-            ('chess_A', chess_A), 
-            ('flow_map', flow_map)
-        ])
-        
+
+        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('chess_A', chess_A), ('flow_map', flow_map)])
+         
 
         return ret_visuals
- 
+
     def save(self, label):
         self.save_network(self.netG_AB, 'G_AB', label, self.gpu_ids)
-        self.save_network(self.netG_AB, 'G_gc_AB', label, self.gpu_ids)
+        self.save_network(self.netG_gc_AB, 'G_gc_AB', label, self.gpu_ids)
         self.save_network(self.netD_B, 'D_B', label, self.gpu_ids)
         self.save_network(self.netD_gc_B, 'D_gc_B', label, self.gpu_ids)
 
     def test(self):
         self.real_A = Variable(self.input_A)
+        self.real_gc_A = self.rot90(self.input_A, 0)
         self.real_B = Variable(self.input_B)
         
-        self.fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
+        fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
+        fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
+        self.flow_A = flow_A
+        self.fake_B = fake_B.data
+        self.fake_gc_B = fake_gc_B.data

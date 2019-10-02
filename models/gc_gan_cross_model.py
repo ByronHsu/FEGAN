@@ -267,7 +267,7 @@ class GcGANCrossModel(BaseModel):
             self.loss_idt = 0
             self.loss_idt_gc = 0
 
-        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_selfflow + loss_smooth
+        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_selfflow + loss_smooth + loss_rotflow
 
         loss_G.backward()
 
@@ -362,7 +362,7 @@ class GcGANCrossModel(BaseModel):
         flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
         # print(self.flow_A[0] + self.grid[0])
 
-        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake), ('chess_A', chess_A), ('flow_map', flow_map)])
+        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('chess_A', chess_A), ('flow_map', flow_map)])
          
 
         return ret_visuals
