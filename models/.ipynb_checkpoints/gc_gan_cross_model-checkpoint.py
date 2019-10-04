@@ -165,6 +165,26 @@ class GcGANCrossModel(BaseModel):
             return tensor
         return callback
     
+    def get_edge_map(self, tensor, scaling = 2):
+        '''
+            tensor: A batch of image tensor with shape n, c, h, w.
+            scaling: Scaling factor to apply to image before computing edges.
+        '''
+        #h, w = img.shape[0], img.shape[1]
+        n, c, h, w = tensor.shape
+        edge_maps = []
+        for i in range(n):
+            img = to_grayscale(tensor[i, :, :, :]).numpy()
+            if scaling:
+                img = transform.resize(img, (scaling * h, scaling * w), anti_aliasing = True)
+            edges = 255 * feature.canny(img, sigma = 2).astype(np.uint8)
+            if scaling:
+                edges = transform.resize(edges, (h, w), anti_aliasing = True, preserve_range = True).astype(np.uint8)
+                edges = cv2.equalizeHist(edges)
+                # edges = (edges != 0) * 255
+            edge_maps.append(torch.tensor(edges, dtype = torch.float).unsqueeze(0).unsqueeze(0))
+        return torch.cat(tuple(edge_maps), dim = 0)
+
     def forward(self):
         input_A = self.input_A.clone()
         input_B = self.input_B.clone()
