@@ -22,9 +22,8 @@ class Self_Attn(nn.Module):
         super(Self_Attn,self).__init__()
         self.chanel_in = in_dim
         self.activation = activation
-        
-        self.query_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8 , kernel_size= 1)
-        self.key_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8 , kernel_size= 1)
+        self.query_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8, kernel_size = 1)#in_dim//8 , kernel_size= 1)
+        self.key_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8, kernel_size = 1)#in_dim//8 , kernel_size= 1)
         self.value_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim , kernel_size= 1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
@@ -187,8 +186,7 @@ def define_D(input_nc, ndf, which_model_netD,
         netD = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid, gpu_ids=gpu_ids)
     elif which_model_netD == 'pixel':
         netD = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer, use_sigmoid=use_sigmoid, gpu_ids=gpu_ids)
-    elif which_model_netD == 'vgg13_bn':
-        netD = vgg13_bn()
+
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' %
                                   which_model_netD)
@@ -341,8 +339,10 @@ class ResnetBlock(nn.Module):
             p = 1
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+        att = Self_Attn(dim, 'relu')
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias),
-                       norm_layer(dim)]
+                       norm_layer(dim),
+                      att]
 
         return nn.Sequential(*conv_block)
 
@@ -374,7 +374,8 @@ class UnetGenerator(nn.Module):
 
     def forward(self, input):
         if self.gpu_ids and isinstance(input.data, torch.cuda.FloatTensor):
-            return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            flow = nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            return flow
         else:
             return self.model(input)
 
@@ -406,6 +407,7 @@ class UnetSkipConnectionBlock(nn.Module):
                                         padding=1)
             down = [downconv]
             up = [uprelu, upconv, nn.Tanh()]
+
             model = down + [submodule] + up
         elif innermost:
             upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
@@ -419,10 +421,15 @@ class UnetSkipConnectionBlock(nn.Module):
                                         kernel_size=4, stride=2,
                                         padding=1, bias=use_bias)
             # Self attention layer to add global information
-            att = Self_Attn(outer_nc, 'relu')
-            down = [downrelu, downconv, downnorm]
-            up = [uprelu, upconv, upnorm, att] # add att after up conv
 
+            # print(outer_nc)
+            # input()
+            down = [downrelu, downconv, downnorm]
+            if outer_nc <= 128:
+                att = Self_Attn(outer_nc, 'relu')
+                up = [uprelu, upconv, upnorm, att] # add att after up conv
+            else:
+                up = [uprelu, upconv, upnorm]
             if use_dropout:
                 model = down + [submodule] + up + [nn.Dropout(0.5)]
             else:
@@ -446,7 +453,7 @@ class NLayerDiscriminator(nn.Module):
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
-
+        spec_norm = nn.utils.spectral_norm
         kw = 4
         padw = 1
         sequence = [
@@ -482,10 +489,10 @@ class NLayerDiscriminator(nn.Module):
 
         self.model = nn.Sequential(*sequence)
         # This FCN is a modified version to the original PatchGAN.
-        self.fc = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 1024),
-            nn.Linear(1024, 1)
-        )
+        # self.fc = nn.Sequential(
+        #     nn.Linear(512 * 7 * 7, 1024),
+        #     nn.Linear(1024, 1)
+        # )
     def forward(self, input):
         if len(self.gpu_ids) and isinstance(input.data, torch.cuda.FloatTensor):
             feats = nn.parallel.data_parallel(self.model, input, self.gpu_ids)

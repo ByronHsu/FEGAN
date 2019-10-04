@@ -7,11 +7,13 @@ from . import html
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import torchvision.utils as vutils
 
 class Visualizer():
     def __init__(self, opt):
         # self.opt = opt
         self.display_id = opt.display_id
+        self.tensorboard = opt.tensorboard
         self.use_html = opt.isTrain and not opt.no_html
         self.win_size = opt.display_winsize
         self.name = opt.name
@@ -20,7 +22,9 @@ class Visualizer():
         if self.display_id > 0:
             import visdom
             self.vis = visdom.Visdom(port=opt.display_port)
-
+        if self.tensorboard:
+            from tensorboardX import SummaryWriter
+            self.writer = SummaryWriter('runs/{}'.format(self.name))
         if self.use_html:
             self.web_dir = os.path.join(opt.checkpoints_dir, opt.name, 'web')
             self.img_dir = os.path.join(self.web_dir, 'images')
@@ -77,6 +81,10 @@ class Visualizer():
                                    win=self.display_id + idx)
                     idx += 1
 
+        if self.tensorboard:
+            for label, image_numpy in visuals.items():
+                self.writer.add_image(label, image_numpy.transpose([2, 0, 1]), epoch)
+                
         if self.use_html and (save_result or not self.saved):  # save images to a html file
             self.saved = True
             for label, image_numpy in visuals.items():
@@ -104,6 +112,7 @@ class Visualizer():
             self.plot_data = {'X': [], 'Y': [], 'legend': list(errors.keys())}
         self.plot_data['X'].append(epoch + counter_ratio)
         self.plot_data['Y'].append([errors[k] for k in self.plot_data['legend']])
+        #print(self.plot_data['legend'])
         opts={
                 'title': self.name + ' loss over time',
                 'legend': self.plot_data['legend'],
@@ -116,7 +125,11 @@ class Visualizer():
                 Y=np.array(self.plot_data['Y']),
                 opts=opts,
                 win=self.display_id)
-
+        if self.tensorboard:
+            recent_X = self.plot_data['X'][-1]
+            recent_Y = self.plot_data['Y'][-1]
+            for i in range(len(self.plot_data['legend'])):
+                self.writer.add_scalar('errors/{}'.format(self.plot_data['legend'][i]), recent_Y[i], recent_X)
         plt.figure()
         plt.title(opts['title'])
         plt.xlabel(opts['xlabel'])

@@ -36,6 +36,8 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--lambda_crossflow', type=float, default=1, help='cross-flow constraint for fisheye flow map')
         self.parser.add_argument('--lambda_selfflow', type=float, default=1, help='self-flow constraint for fisheye flow map')
         self.parser.add_argument('--lambda_smooth', type=float, default=1, help='smooth constraint for fisheye flow map')
-        
-        
+        self.parser.add_argument('--lambda_rot', type=float, default=1, help='rotation constraint for fisheye flow map')
+        self.parser.add_argument('--GD_share', action='store_true', help='G, D both share the same model')
+        self.parser.add_argument('--tensorboard', action='store_true', help="Enable tensorboard.")
+        self.parser.add_argument('--upsample_flow', type=float, help="Upsample ratio for flow map.")
         self.isTrain = True

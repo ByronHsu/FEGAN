@@ -339,8 +339,10 @@ class ResnetBlock(nn.Module):
             p = 1
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+        att = Self_Attn(dim, 'relu')
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias),
-                       norm_layer(dim)]
+                       norm_layer(dim),
+                      att]
 
         return nn.Sequential(*conv_block)
 

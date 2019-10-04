@@ -190,9 +190,9 @@ class GcGANCrossModel(BaseModel):
           raise ValueError("Geometry transformation function [%s] not recognized." % self.opt.geometry)
         
     def forward_G_basic(self, netG, real):
-        real_down = F.interpolate(real, scale_factor=0.5)
+        real_down = F.interpolate(real, scale_factor=1 / self.opt.upsample_flow)
         flow = netG.forward(real_down)
-        flow = F.upsample(flow, scale_factor=2).permute(0, 2, 3, 1)
+        flow = F.interpolate(flow, scale_factor=self.opt.upsample_flow).permute(0, 2, 3, 1)
         self.theta = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).repeat(self.input_A.shape[0], 1, 1)
         self.grid = F.affine_grid(self.theta, self.input_A.shape).cuda() 
         fake = F.grid_sample(real, flow + self.grid, padding_mode="zeros")
@@ -220,7 +220,7 @@ class GcGANCrossModel(BaseModel):
         flow = flow.view(n, h*w, 2)
         
         cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
-        cos_similarity = torch.abs(cos(v, flow))
+        cos_similarity = torch.abs(cos(v, flow)) # May point to same or negative direction
         radial_loss = torch.mean(cos_similarity)
         return -radial_loss
 
@@ -253,10 +253,11 @@ class GcGANCrossModel(BaseModel):
         loss_smooth = (self.cal_smooth(flow_A) + self.cal_smooth(flow_gc_A)) * self.opt.lambda_smooth
         loss_selfflow = (self.selfFlowLoss(flow_A) + self.selfFlowLoss(flow_gc_A)) * self.opt.lambda_selfflow
         loss_rotflow = (self.rotation_constraint(flow_A) + self.rotation_constraint(flow_gc_A)) * self.opt.lambda_rot
+        
         if self.opt.geometry == 'rot':
-            loss_gc = self.get_gc_rot_loss(fake_B, fake_gc_B, 0)
+            loss_gc = self.get_gc_rot_loss(fake_B, fake_gc_B, 0) * self.opt.lambda_gc
         elif self.opt.geometry == 'vf':
-            loss_gc = self.get_gc_vf_loss(fake_B, fake_gc_B)
+            loss_gc = self.get_gc_vf_loss(fake_B, fake_gc_B) * self.opt.lambda_gc
 
         if self.opt.identity > 0:
             # G_AB should be identity if real_B is fed.
