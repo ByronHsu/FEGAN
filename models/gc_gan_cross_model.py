@@ -17,6 +17,8 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms 
 import random
 from PIL import Image
+from skimage import io, feature, transform
+import cv2
 
 torch.autograd.set_detect_anomaly(True)
 class GcGANCrossModel(BaseModel):
@@ -171,6 +173,8 @@ class GcGANCrossModel(BaseModel):
             scaling: Scaling factor to apply to image before computing edges.
         '''
         #h, w = img.shape[0], img.shape[1]
+        def to_grayscale(img):
+            return img[0, :, :] * 0.2126 + img[1, :, :] * 0.7152 + img[2, :, :] * 0.0722
         n, c, h, w = tensor.shape
         edge_maps = []
         for i in range(n):
