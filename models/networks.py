@@ -189,6 +189,8 @@ def define_D(input_nc, ndf, size, which_model_netD,
         netD = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer, use_sigmoid=use_sigmoid, gpu_ids=gpu_ids)
     elif which_model_netD == 'DCGAN':
         netD = DCGANDiscriminator(input_nc, size, ndf, norm_layer=norm_layer, use_sigmoid=False, gpu_ids=gpu_ids)
+    elif which_model_netD == 'Fusion':
+        netD = FusionDiscriminator(input_nc, size, ndf, n_layer=3, norm_layer=norm_layer, use_sigmoid=False, gpu_ids=gpu_ids)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' %
                                   which_model_netD)
@@ -456,7 +458,7 @@ class NLayerDiscriminator(nn.Module):
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
             use_bias = norm_layer == nn.InstanceNorm2d
-        spec_norm = nn.utils.spectral_norm
+
         kw = 4
         padw = 1
         sequence = [
@@ -582,3 +584,79 @@ class PixelDiscriminator(nn.Module):
             return nn.parallel.data_parallel(self.net, input, self.gpu_ids)
         else:
             return self.net(input)
+
+class FusionDiscriminator(nn.Module):
+    def __init__(self, input_nc, size=256, ndf=64, n_layer = 3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[]):
+        '''
+        Output 1. real/fake, 2. class
+        Both Gen and Dis needs to minimize class loss
+        '''
+        super(FusionDiscriminator, self).__init__()
+        self.gpu_ids = gpu_ids
+
+        sequence = []
+        sequence += [
+            # input is (nc) x size x size
+            nn.Conv2d(input_nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+        ]
+        # now state is ndf x (size // 2) x (size // 2)
+        # we need to downsize (size // 2) x (size // 2) to 4 x 4
+        _iter = int(math.log((size // 8), 2)) # calculate how mamy times needed to iterate
+        prev_ndf = ndf
+        curr_ndf = ndf
+        for i in range(n_layer):
+            prev_ndf = curr_ndf
+            curr_ndf = min(prev_ndf * 2, ndf * 8)
+            sequence += [
+                nn.Conv2d(prev_ndf, curr_ndf, 4, 2, 1, bias=False),
+                norm_layer(curr_ndf),
+                nn.LeakyReLU(0.2, inplace=True)
+            ]
+        self.shared = nn.Sequential(*sequence)
+
+        # ===============
+        # Distort Layer
+        # ===============
+        sequence = []
+        for i in range(n_layer, _iter):
+            prev_ndf = curr_ndf
+            curr_ndf = min(prev_ndf * 2, ndf * 8)
+            sequence += [
+                nn.Conv2d(prev_ndf, curr_ndf, 4, 2, 1, bias=False),
+                norm_layer(curr_ndf),
+                nn.LeakyReLU(0.2, inplace=True)
+            ]
+        # now state is _ x 4 x 4
+
+        # this layer will downsize it to 1 x 1
+        sequence += [
+            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+        ]
+        self.distortLayer = nn.Sequential(*sequence) # Classify distort or not, only output a scaler
+    
+        # ===============
+        # Real Layer
+        # ===============
+        sequence = []
+
+        sequence += [
+            nn.Conv2d(prev_ndf, curr_ndf, 4, 1, 0, bias=False),
+            norm_layer(curr_ndf),
+            nn.LeakyReLU(0.2, True)
+        ]
+
+        sequence += [nn.Conv2d(curr_ndf, 1, 4, 1, 0, bias=False)]
+        self.realLayer = nn.Sequential(*sequence) # Classify real or fake, output many patchs
+
+    def forward(self, input):
+        if input.is_cuda and len(self.gpu_ids) > 1:
+            features = nn.parallel.data_parallel(self.shared, input, self.gpu_ids)
+            distort = nn.parallel.data_parallel(self.distortLayer, features, self.gpu_ids).view(-1, 1)
+            real = nn.parallel.data_parallel(self.realLayer, features, self.gpu_ids)
+            return real, distort
+        else:
+            features = self.shared(input)
+            distort = self.distortLayer(features).view(-1, 1)
+            real = self.realLayer(features)
+            return real, distort
