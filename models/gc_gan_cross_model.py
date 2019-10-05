@@ -59,13 +59,13 @@ class GcGANCrossModel(BaseModel):
 
         if self.isTrain:
             use_sigmoid = opt.no_lsgan
-            self.netD_B = networks.define_D(opt.output_nc, opt.ndf,
+            self.netD_B = networks.define_D(opt.output_nc, opt.ndf, size,
                                             opt.which_model_netD,
                                             opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids)
             if opt.GD_share:
                 self.netD_gc_B = self.netD_B
             else:
-                self.netD_gc_B = networks.define_D(opt.output_nc, opt.ndf,
+                self.netD_gc_B = networks.define_D(opt.output_nc, opt.ndf, size,
                                                 opt.which_model_netD,
                                                 opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids)
 

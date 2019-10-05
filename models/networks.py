@@ -6,6 +6,7 @@ from torch.autograd import Variable
 from torch.optim import lr_scheduler
 import numpy as np
 import torch.nn.functional as F
+import math
 from torch.autograd import Variable
 
 ###############################################################################
@@ -170,7 +171,7 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
     return netG
 
 
-def define_D(input_nc, ndf, which_model_netD,
+def define_D(input_nc, ndf, size, which_model_netD,
              n_layers_D=3, norm='batch', use_sigmoid=False, no_patch=False, init_type='normal', gpu_ids=[]):
     netD = None
     use_gpu = len(gpu_ids) > 0
@@ -186,7 +187,8 @@ def define_D(input_nc, ndf, which_model_netD,
         netD = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid, no_patch=no_patch, gpu_ids=gpu_ids)
     elif which_model_netD == 'pixel':
         netD = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer, use_sigmoid=use_sigmoid, gpu_ids=gpu_ids)
-
+    elif which_model_netD == 'DCGAN':
+        netD = DCGANDiscriminator(input_nc, size, ndf, norm_layer=norm_layer, use_sigmoid=False, gpu_ids=gpu_ids)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' %
                                   which_model_netD)
@@ -484,12 +486,6 @@ class NLayerDiscriminator(nn.Module):
                 norm_layer(ndf * nf_mult),
                 nn.LeakyReLU(0.2, True)
             ]
-            sequence += [
-                nn.Conv2d(ndf * nf_mult, ndf * nf_mult,
-                        kernel_size=kw, stride=2, padding=padw, bias=use_bias),
-                norm_layer(ndf * nf_mult),
-                nn.LeakyReLU(0.2, True)
-            ]
         else:
             sequence += [
                 nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
@@ -520,6 +516,45 @@ class NLayerDiscriminator(nn.Module):
         else:
             return self.model(_input)
 
+class DCGANDiscriminator(nn.Module):
+    def __init__(self, input_nc, size=256, ndf=64, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[]):
+        super(DCGANDiscriminator, self).__init__()
+        self.gpu_ids = gpu_ids
+
+        sequence = []
+        sequence += [
+            # input is (nc) x size x size
+            nn.Conv2d(input_nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+        ]
+        # now state is ndf x (size // 2) x (size // 2)
+        # we need to downsize (size // 2) x (size // 2) to 4 x 4
+        _iter = int(math.log((size // 8), 2)) # calculate how mamy times needed to iterate
+        prev_ndf = ndf
+        curr_ndf = ndf
+        for i in range(_iter):
+            prev_ndf = curr_ndf
+            curr_ndf = min(prev_ndf * 2, ndf * 8)
+            sequence += [
+                nn.Conv2d(prev_ndf, curr_ndf, 4, 2, 1, bias=False),
+                norm_layer(curr_ndf),
+                nn.LeakyReLU(0.2, inplace=True)
+            ]
+        
+        # now state is _ x 4 x 4
+        # this layer will downsize it to 1 x 1
+        sequence += [
+            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+        ]
+        self.main = nn.Sequential(*sequence)
+
+    def forward(self, input):
+        if input.is_cuda and len(self.gpu_ids) > 1:
+            output = nn.parallel.data_parallel(self.main, input, self.gpu_ids)
+        else:
+            output = self.main(input)
+
+        return output.view(-1, 1)
 class PixelDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[]):
         super(PixelDiscriminator, self).__init__()
