@@ -43,8 +43,9 @@ class GcGANCrossModel(BaseModel):
         else:
             self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc, opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
         
-        self.true = True
-        self.false = False
+        self.true = torch.ones((nb, 1)).cuda() if opt.no_patch else True
+        self.false = torch.zeros((nb, 1)).cuda() if opt.no_patch else False
+
                 
         img_path = os.path.join(os.getcwd(), 'chessboard.jpg')
         img = Image.open(img_path)
@@ -60,13 +61,13 @@ class GcGANCrossModel(BaseModel):
             use_sigmoid = opt.no_lsgan
             self.netD_B = networks.define_D(opt.output_nc, opt.ndf,
                                             opt.which_model_netD,
-                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
+                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids)
             if opt.GD_share:
                 self.netD_gc_B = self.netD_B
             else:
                 self.netD_gc_B = networks.define_D(opt.output_nc, opt.ndf,
                                                 opt.which_model_netD,
-                                                opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids)
+                                                opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids)
 
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
@@ -81,7 +82,11 @@ class GcGANCrossModel(BaseModel):
             self.fake_B_pool = ImagePool(opt.pool_size)
             self.fake_gc_B_pool = ImagePool(opt.pool_size)
             # define loss functions
-            self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor) # torch.nn.BCEWithLogitsLoss() #
+
+            if opt.no_patch:
+                self.criterionGAN = torch.nn.BCEWithLogitsLoss()
+            else:
+                self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor)
             self.criterionIdt = torch.nn.L1Loss()
             self.criterionGc = torch.nn.L1Loss()
             self.criterionCrossFlow = torch.nn.L1Loss() # constraint 1: two generated flow should be the same due to symmetry
