@@ -36,12 +36,12 @@ class GcGANCrossModel(BaseModel):
 
 
         self.netG_AB = networks.define_G(opt.input_nc, flow_nc,
-                                        opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
+                                        opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.use_att, self.gpu_ids)
         
         if opt.GD_share:
             self.netG_gc_AB = self.netG_AB # share
         else:
-            self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc, opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
+            self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc, opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.use_att, self.gpu_ids)
         
         self.true = torch.ones((nb, 1)).cuda()
         self.false = torch.zeros((nb, 1)).cuda()

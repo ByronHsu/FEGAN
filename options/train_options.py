@@ -41,4 +41,5 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--tensorboard', action='store_true', help="Enable tensorboard.")
         self.parser.add_argument('--upsample_flow', type=float, help="Upsample ratio for flow map.")
         self.parser.add_argument('--no_patch', action='store_true', help="If true, dis only outputs one scalar.")
+        self.parser.add_argument('--use_att', action='store_true', help="Whether to use att in unet")
         self.isTrain = True
