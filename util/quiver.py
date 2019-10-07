@@ -15,7 +15,7 @@ def plot_quiver(flow, n_sample = 30, _range = [-1, 1]):
         _range: the range of the map
     """
     size = flow.shape[0]
-    indexs = np.arange(0, size, size / n_sample, np.int_)
+    indexs = np.arange(0, size, size / n_sample).astype(np.int_)
 
     L, R = _range
     X = np.arange(L, R, (R - L) / len(indexs))
