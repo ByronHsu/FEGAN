@@ -427,8 +427,6 @@ class UnetSkipConnectionBlock(nn.Module):
                                         padding=1, bias=use_bias)
             # Self attention layer to add global information
 
-            # print(outer_nc)
-            # input()
             down = [downrelu, downconv, downnorm]
             if outer_nc <= 128 and use_att:
                 att = Self_Attn(outer_nc, 'relu')

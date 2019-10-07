@@ -87,7 +87,7 @@ class GcGANCrossModel(BaseModel):
             self.criterionBCE = torch.nn.BCEWithLogitsLoss()
             self.criterionIdt = torch.nn.L1Loss()
             self.criterionGc = torch.nn.L1Loss()
-            self.criterionCrossFlow = torch.nn.L1Loss() # constraint 1: two generated flow should be the same due to symmetry
+            self.criterionCrossFlow = torch.nn.L1Loss()
             self.criterionRotFlow = torch.nn.L1Loss()
             # initialize optimizers
             
@@ -158,6 +158,7 @@ class GcGANCrossModel(BaseModel):
             inv_idx = torch.arange(size-1, -1, -1).long().cuda()
             _iter = deg // 90
             for _ in range(_iter):
+                # In each iterarion, the image rotates 90 deg
                 tensor = tensor.transpose(2, 3)
                 tensor = torch.index_select(tensor, 3, inv_idx)
             return tensor
@@ -255,7 +256,6 @@ class GcGANCrossModel(BaseModel):
         rot_loss = criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)
         return rot_loss
 
-    def selfFlowLoss(self, flow):
         return self.radial_constraint(flow)
     
     def backward_G(self):
@@ -272,7 +272,7 @@ class GcGANCrossModel(BaseModel):
         # Constraints for flow map
         loss_crossflow = self.criterionCrossFlow(flow_A, flow_gc_A)*self.opt.lambda_crossflow
         loss_smooth = (self.cal_smooth(flow_A) + self.cal_smooth(flow_gc_A)) * self.opt.lambda_smooth
-        loss_selfflow = (self.selfFlowLoss(flow_A) + self.selfFlowLoss(flow_gc_A)) * self.opt.lambda_selfflow
+        loss_radialflow = (self.radial_constraint(flow_A) + self.radial_constraint(flow_gc_A)) * self.opt.lambda_radial
         loss_rotflow = (self.rotation_constraint(flow_A) + self.rotation_constraint(flow_gc_A)) * self.opt.lambda_rot
         
         if self.opt.geometry == 'rot':
@@ -300,7 +300,7 @@ class GcGANCrossModel(BaseModel):
             self.loss_idt = 0
             self.loss_idt_gc = 0
 
-        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_selfflow + loss_smooth + loss_rotflow
+        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_radialflow + loss_smooth + loss_rotflow
 
         loss_G.backward()
 
@@ -314,16 +314,10 @@ class GcGANCrossModel(BaseModel):
         self.loss_G_gc_AB= loss_G_gc_AB.item()
         self.loss_gc = loss_gc.item()
         self.loss_crossflow = loss_crossflow.item()
-        self.loss_selfflow = loss_selfflow.item()
+        self.loss_radialflow = loss_radialflow.item()
         self.loss_smooth = loss_smooth.item()
         self.loss_rotflow = loss_rotflow.item()
-        # for param in self.netG_AB.parameters():
-        #     print(param.data)
-        #     break
-        # for param in self.netG_gc_AB.parameters():
-        #     print(param.data)
-        #     break
-        # input()
+
     def get_gc_rot_loss(self, AB, AB_gc, direction):
         loss_gc = 0.0
 
@@ -358,7 +352,6 @@ class GcGANCrossModel(BaseModel):
         tmp = self.backward_D_basic(self.netD_B, self.real_B, fake_B.detach(), self.real_A.detach())
         loss_D_B_real, loss_D_B_distort = loss_D_B_real + tmp[0], loss_D_B_distort + tmp[1]
 
-        # self.netD_gc_B, self.real_gc_B, fake_gc_B
         tmp = self.backward_D_basic(self.netD_gc_B, self.real_gc_B, fake_gc_B.detach(), self.real_gc_A.detach())
         loss_D_B_real, loss_D_B_distort = loss_D_B_real + tmp[0], loss_D_B_distort + tmp[1]
         
@@ -380,7 +373,7 @@ class GcGANCrossModel(BaseModel):
     def get_current_errors(self):
         ret_errors = OrderedDict([('D_B_real', self.loss_D_B_real), ('D_B_distort', self.loss_D_B_distort), ('G_AB', self.loss_G_AB),
                                   ('Gc', self.loss_gc), ('G_gc_AB', self.loss_G_gc_AB), ('Smooth', self.loss_smooth),
-                                  ('Crossflow', self.loss_crossflow), ('Self-flow', self.loss_selfflow), 
+                                  ('Crossflow', self.loss_crossflow), ('Radial-flow', self.loss_radialflow), 
                                   ('Rotation-flow', self.loss_rotflow)])
 
         if self.opt.identity > 0.0:
@@ -413,7 +406,6 @@ class GcGANCrossModel(BaseModel):
         self.save_network(self.netG_gc_AB, 'G_gc_AB', label, self.gpu_ids)
         self.save_network(self.netD_B, 'D_B', label, self.gpu_ids)
         self.save_network(self.netD_gc_B, 'D_gc_B', label, self.gpu_ids)
-
 
     def test(self):
         self.real_A = Variable(self.input_A)

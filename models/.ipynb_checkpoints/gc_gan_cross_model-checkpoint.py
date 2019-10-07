@@ -271,7 +271,7 @@ class GcGANCrossModel(BaseModel):
         # Constraints for flow map
         loss_crossflow = self.criterionCrossFlow(flow_A, flow_gc_A)*self.opt.lambda_crossflow
         loss_smooth = (self.cal_smooth(flow_A) + self.cal_smooth(flow_gc_A)) * self.opt.lambda_smooth
-        loss_selfflow = (self.selfFlowLoss(flow_A) + self.selfFlowLoss(flow_gc_A)) * self.opt.lambda_selfflow
+        loss_selfflow = (self.selfFlowLoss(flow_A) + self.selfFlowLoss(flow_gc_A)) * self.opt.lambda_radial
         loss_rotflow = (self.rotation_constraint(flow_A) + self.rotation_constraint(flow_gc_A)) * self.opt.lambda_rot
         
         if self.opt.geometry == 'rot':

@@ -16,7 +16,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--which_epoch', type=str, default='latest', help='which epoch to load? set to latest to use latest cached model')
         self.parser.add_argument('--niter', type=int, default=100, help='# of iter at starting learning rate')
         self.parser.add_argument('--niter_decay', type=int, default=100, help='# of iter to linearly decay learning rate to zero')
-        self.parser.add_argument('--iter_num', type=int, default=0, help='# of iter at starting learning rate')
+        # self.parser.add_argument('--iter_num', type=int, default=0, help='# of iter at starting learning rate')
         self.parser.add_argument('--max_iter_num', type=int, default=1000, help='# of iter to linearly decay learning rate to zero')
         self.parser.add_argument('--beta1', type=float, default=0.5, help='momentum term of adam')
         self.parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate for adam')
@@ -34,7 +34,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--lambda_G', type=float, default=1.0, help='trade-off parameter for G, gc, and idt')
         
         self.parser.add_argument('--lambda_crossflow', type=float, default=1, help='cross-flow constraint for fisheye flow map')
-        self.parser.add_argument('--lambda_selfflow', type=float, default=1, help='self-flow constraint for fisheye flow map')
+        self.parser.add_argument('--lambda_radial', type=float, default=1, help='self-flow constraint for fisheye flow map')
         self.parser.add_argument('--lambda_smooth', type=float, default=1, help='smooth constraint for fisheye flow map')
         self.parser.add_argument('--lambda_rot', type=float, default=1, help='rotation constraint for fisheye flow map')
         self.parser.add_argument('--GD_share', action='store_true', help='G, D both share the same model')
