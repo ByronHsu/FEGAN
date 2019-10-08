@@ -613,27 +613,37 @@ class FusionDiscriminator(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True)
             ]
         self.shared = nn.Sequential(*sequence)
-
+        prev_ndf = curr_ndf
         # ===============
         # Distort Layer
         # ===============
-        sequence = []
-        for i in range(n_layer, _iter):
-            prev_ndf = curr_ndf
-            curr_ndf = min(prev_ndf * 2, ndf * 8)
-            sequence += [
-                nn.Conv2d(prev_ndf, curr_ndf, 4, 2, 1, bias=False),
-                norm_layer(curr_ndf),
-                nn.LeakyReLU(0.2, inplace=True)
-            ]
-        # now state is _ x 4 x 4
+        # sequence = []
+        # for i in range(n_layer, _iter):
+        #     prev_ndf = curr_ndf
+        #     curr_ndf = min(prev_ndf * 2, ndf * 8)
+        #     sequence += [
+        #         nn.Conv2d(prev_ndf, curr_ndf, 4, 2, 1, bias=False),
+        #         norm_layer(curr_ndf),
+        #         nn.LeakyReLU(0.2, inplace=True)
+        #     ]
+        # # now state is _ x 4 x 4
 
-        # this layer will downsize it to 1 x 1
+        # # this layer will downsize it to 1 x 1
+        # sequence += [
+        #     nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+        # ]
+        sequence = []
+
         sequence += [
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
+            nn.Conv2d(prev_ndf, curr_ndf, 4, 1, 0, bias=False),
+            norm_layer(curr_ndf),
+            nn.LeakyReLU(0.2, True)
         ]
-        self.distortLayer = nn.Sequential(*sequence) # Classify distort or not, only output a scaler
-    
+
+        sequence += [nn.Conv2d(curr_ndf, 1, 4, 1, 0, bias=False)]
+
+        self.distortLayer = nn.Sequential(*sequence) # try patch
+
         # ===============
         # Real Layer
         # ===============
@@ -651,11 +661,11 @@ class FusionDiscriminator(nn.Module):
     def forward(self, input):
         if input.is_cuda and len(self.gpu_ids) > 1:
             features = nn.parallel.data_parallel(self.shared, input, self.gpu_ids)
-            distort = nn.parallel.data_parallel(self.distortLayer, features, self.gpu_ids).view(-1, 1)
+            distort = nn.parallel.data_parallel(self.distortLayer, features, self.gpu_ids)
             real = nn.parallel.data_parallel(self.realLayer, features, self.gpu_ids)
             return real, distort
         else:
             features = self.shared(input)
-            distort = self.distortLayer(features).view(-1, 1)
             real = self.realLayer(features)
+            distort = self.distortLayer(features)
             return real, distort

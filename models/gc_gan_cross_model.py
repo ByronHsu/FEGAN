@@ -129,17 +129,17 @@ class GcGANCrossModel(BaseModel):
         # Real_clean
         pred_real, pred_distort = netD(real)
         loss_D_real += self.criterionGAN(pred_real, True)
-        loss_D_distort += self.criterionBCE(pred_distort, self.false)
+        loss_D_distort += self.criterionGAN(pred_distort, False)
 
         # Real_distort
         pred_real, pred_distort = netD(real2)
         # loss_D_real += self.criterionGAN(pred_real, True)
-        loss_D_distort += self.criterionBCE(pred_distort, self.true)
+        loss_D_distort += self.criterionGAN(pred_distort, True)
 
         # Fake_clean
         pred_real, pred_distort = netD(fake)
         loss_D_real += self.criterionGAN(pred_real, False)
-        loss_D_distort += self.criterionBCE(pred_distort, self.false)
+        loss_D_distort += self.criterionGAN(pred_distort, False)
 
         loss_D = loss_D_real + loss_D_distort
         loss_D.backward()
@@ -263,11 +263,11 @@ class GcGANCrossModel(BaseModel):
         
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
         pred_real, pred_distort = self.netD_B(fake_B)
-        loss_G_AB = ( self.criterionGAN(pred_real, True) + self.criterionBCE(pred_distort, self.false) )*self.opt.lambda_G
+        loss_G_AB = ( self.criterionGAN(pred_real, True) + self.criterionGAN(pred_distort, False) )*self.opt.lambda_G
 
         fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
         pred_real, pred_distort = self.netD_gc_B(fake_gc_B)
-        loss_G_gc_AB = ( self.criterionGAN(pred_real, True) + self.criterionBCE(pred_distort, self.false) )*self.opt.lambda_G
+        loss_G_gc_AB = ( self.criterionGAN(pred_real, True) + self.criterionGAN(pred_distort, False) )*self.opt.lambda_G
 
         # Constraints for flow map
         loss_crossflow = self.criterionCrossFlow(flow_A, flow_gc_A)*self.opt.lambda_crossflow

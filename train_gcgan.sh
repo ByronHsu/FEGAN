@@ -1,11 +1,13 @@
 python3 \
 train.py \
---dataroot ./datasets/lsun \
---name 10072344 \
+--dataroot ../FEGAN-dataset/distorted_datasets/MCindoor \
+--name 10080005 \
 --model gc_gan_cross \
 --batchSize 4 \
 --save_epoch 10 \
 --niter 100 \
+--fineSize 256 \
+--loadSize 256 \
 --which_direction BtoA \
 --tensorboard \
 --nThreads 0 \
@@ -18,6 +20,6 @@ train.py \
 --which_model_netD Fusion \
 --lambda_gc 1 \
 --lambda_smooth 1 \
---lambda_crossflow 2 \
+--lambda_crossflow 0 \
 --lambda_radial 0.1 \
 --lambda_rot 0 \
