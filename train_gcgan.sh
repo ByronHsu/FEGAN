@@ -1,11 +1,17 @@
+if [[ $# -lt 2 ]] ; then
+    echo 'bash train_gcgan.sh [dataset_path] [name]'
+    exit 0
+fi
 python3 \
 train.py \
---dataroot ./datasets/lsun \
---name 10072344 \
+--dataroot $1 \
+--name $2 \
 --model gc_gan_cross \
 --batchSize 4 \
 --save_epoch 10 \
---niter 100 \
+--niter 80 \
+--niter_decay 20 \
+--save_epoch_freq 3 \
 --which_direction BtoA \
 --tensorboard \
 --nThreads 0 \
