@@ -8,7 +8,6 @@ train.py \
 --name $2 \
 --model gc_gan_cross \
 --batchSize 4 \
---save_epoch 10 \
 --niter 80 \
 --niter_decay 20 \
 --save_epoch_freq 3 \

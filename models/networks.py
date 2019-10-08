@@ -344,10 +344,9 @@ class ResnetBlock(nn.Module):
             p = 1
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
-        att = Self_Attn(dim, 'relu')
+
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias),
-                       norm_layer(dim),
-                      att]
+                       norm_layer(dim)]
 
         return nn.Sequential(*conv_block)
 
@@ -508,8 +507,6 @@ class NLayerDiscriminator(nn.Module):
     def forward(self, _input):
         if len(self.gpu_ids) and isinstance(_input.data, torch.cuda.FloatTensor):
             out = nn.parallel.data_parallel(self.model, _input, self.gpu_ids)
-            # print(out.shape)
-            # input()
             if self.no_patch:
                 out = out.reshape(_input.shape[0], -1)
                 out = self.fc(out)
