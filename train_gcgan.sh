@@ -10,7 +10,7 @@ train.py \
 --batchSize 4 \
 --niter 80 \
 --niter_decay 20 \
---save_epoch_freq 3 \
+--save_epoch_freq 2 \
 --which_direction BtoA \
 --tensorboard \
 --nThreads 0 \
@@ -21,8 +21,8 @@ train.py \
 --identity 0 \
 --GD_share \
 --which_model_netD Fusion \
---lambda_gc 1 \
+--lambda_gc 0.2 \
 --lambda_smooth 1 \
 --lambda_crossflow 2 \
 --lambda_radial 0.1 \
---lambda_rot 0 \
+--lambda_rot 1 \

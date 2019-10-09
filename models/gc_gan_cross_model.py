@@ -384,11 +384,11 @@ class GcGANCrossModel(BaseModel):
 
     def get_current_visuals(self):
         real_A = util.tensor2im(self.real_A.data)
-        real_B = util.tensor2im(self.real_B.data)
-        real_gc_A = util.tensor2im(self.real_gc_A.data)
+        # real_B = util.tensor2im(self.real_B.data)
+        # real_gc_A = util.tensor2im(self.real_gc_A.data)
 
         fake_B = util.tensor2im(self.fake_B)
-        fake_gc_B = util.tensor2im(self.fake_gc_B)
+        # fake_gc_B = util.tensor2im(self.fake_gc_B)
 
         
         chess_A = F.grid_sample(self.chess, (self.flow_A + self.grid)[0].unsqueeze(0))
@@ -396,7 +396,7 @@ class GcGANCrossModel(BaseModel):
         
         flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
         # print(self.flow_A[0] + self.grid[0])
-        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('chess_A', chess_A), ('flow_map', flow_map), ('fake_gc_B', fake_gc_B), ('real_gc_A', real_gc_A)])
+        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('chess_A', chess_A), ('flow_map', flow_map)])
         self.ret_visuals = ret_visuals
 
         return ret_visuals
@@ -409,11 +409,11 @@ class GcGANCrossModel(BaseModel):
 
     def test(self):
         self.real_A = Variable(self.input_A)
-        self.real_gc_A = self.trans(self.input_A)
-        self.real_B = Variable(self.input_B)
+        # self.real_gc_A = self.trans(self.input_A)
+        # self.real_B = Variable(self.input_B)
         
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
-        fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
+        # fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
         self.flow_A = flow_A
         self.fake_B = fake_B.data
-        self.fake_gc_B = fake_gc_B.data
+        # self.fake_gc_B = fake_gc_B.data
