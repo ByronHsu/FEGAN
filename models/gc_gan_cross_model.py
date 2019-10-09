@@ -117,6 +117,8 @@ class GcGANCrossModel(BaseModel):
         AtoB = self.opt.which_direction == 'AtoB'
         input_A = input['A' if AtoB else 'B']
         input_B = input['B' if AtoB else 'A']
+        self.gt_A = input['BtoA']
+
         self.input_A.resize_(input_A.size()).copy_(input_A)
         self.input_B.resize_(input_B.size()).copy_(input_B)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
@@ -386,6 +388,7 @@ class GcGANCrossModel(BaseModel):
         real_A = util.tensor2im(self.real_A.data)
         # real_B = util.tensor2im(self.real_B.data)
         # real_gc_A = util.tensor2im(self.real_gc_A.data)
+        gt_A = util.tensor2im(self.gt_A.data)
 
         fake_B = util.tensor2im(self.fake_B)
         # fake_gc_B = util.tensor2im(self.fake_gc_B)
@@ -396,7 +399,7 @@ class GcGANCrossModel(BaseModel):
         
         flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
         # print(self.flow_A[0] + self.grid[0])
-        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('chess_A', chess_A), ('flow_map', flow_map)])
+        ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('gt_A', gt_A), ('chess_A', chess_A), ('flow_map', flow_map)])
         self.ret_visuals = ret_visuals
 
         return ret_visuals
