@@ -61,21 +61,21 @@ class GcGANCrossModel(BaseModel):
             use_sigmoid = opt.no_lsgan
             self.netD_B = networks.define_D(opt.output_nc, opt.ndf, size,
                                             opt.which_model_netD,
-                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids)
+                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids, opt.use_att)
             if opt.GD_share:
                 self.netD_gc_B = self.netD_B
             else:
                 self.netD_gc_B = networks.define_D(opt.output_nc, opt.ndf, size,
                                                 opt.which_model_netD,
-                                                opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids)
+                                                opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids, opt.use_att)
 
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
             self.load_network(self.netG_AB, 'G_AB', which_epoch)
-            self.load_network(self.netG_gc_AB, 'G_gc_AB', which_epoch)
+            self.load_network(self.netG_gc_AB, 'G_AB', which_epoch)
             if self.isTrain:
                 self.load_network(self.netD_B, 'D_B', which_epoch)
-                self.load_network(self.netD_gc_B, 'D_gc_B', which_epoch)
+                self.load_network(self.netD_gc_B, 'D_B', which_epoch)
 
         if self.isTrain:
             self.old_lr = opt.lr
@@ -244,6 +244,7 @@ class GcGANCrossModel(BaseModel):
         
         cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         cos_similarity = torch.abs(cos(v, flow)) # May point to same or negative direction
+        # cos_similarity = F.leaky_relu(cos(v, flow), negative_slope=0.6)
         radial_loss = torch.mean(cos_similarity)
         return -radial_loss
 
@@ -406,9 +407,9 @@ class GcGANCrossModel(BaseModel):
  
     def save(self, label):
         self.save_network(self.netG_AB, 'G_AB', label, self.gpu_ids)
-        self.save_network(self.netG_gc_AB, 'G_gc_AB', label, self.gpu_ids)
+        self.save_network(self.netG_gc_AB, 'G_AB', label, self.gpu_ids)
         self.save_network(self.netD_B, 'D_B', label, self.gpu_ids)
-        self.save_network(self.netD_gc_B, 'D_gc_B', label, self.gpu_ids)
+        self.save_network(self.netD_gc_B, 'D_B', label, self.gpu_ids)
 
     def test(self):
         self.real_A = Variable(self.input_A)

@@ -173,7 +173,7 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
 
 
 def define_D(input_nc, ndf, size, which_model_netD,
-             n_layers_D=3, norm='batch', use_sigmoid=False, no_patch=False, init_type='normal', gpu_ids=[]):
+             n_layers_D=3, norm='batch', use_sigmoid=False, no_patch=False, init_type='normal', gpu_ids=[], use_att=False):
     netD = None
     use_gpu = len(gpu_ids) > 0
     norm_layer = get_norm_layer(norm_type=norm)
@@ -191,7 +191,7 @@ def define_D(input_nc, ndf, size, which_model_netD,
     elif which_model_netD == 'DCGAN':
         netD = DCGANDiscriminator(input_nc, size, ndf, norm_layer=norm_layer, use_sigmoid=False, gpu_ids=gpu_ids)
     elif which_model_netD == 'Fusion':
-        netD = FusionDiscriminator(input_nc, size, ndf, n_layer=3, norm_layer=norm_layer, use_sigmoid=False, gpu_ids=gpu_ids)
+        netD = FusionDiscriminator(input_nc, size, ndf, n_layer=3, norm_layer=norm_layer, use_sigmoid=False, gpu_ids=gpu_ids, use_att=use_att)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' %
                                   which_model_netD)
@@ -582,7 +582,7 @@ class PixelDiscriminator(nn.Module):
             return self.net(input)
 
 class FusionDiscriminator(nn.Module):
-    def __init__(self, input_nc, size=256, ndf=64, n_layer = 3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[]):
+    def __init__(self, input_nc, size=256, ndf=64, n_layer = 3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[], use_att = False):
         '''
         Output 1. real/fake, 2. class
         Both Gen and Dis needs to minimize class loss
@@ -614,15 +614,19 @@ class FusionDiscriminator(nn.Module):
         # ===============
         # Distort Layer
         # ===============
+        
         sequence = []
+        
         for i in range(n_layer, _iter):
             prev_ndf = curr_ndf
             curr_ndf = min(prev_ndf * 2, ndf * 8)
             sequence += [
                 nn.Conv2d(prev_ndf, curr_ndf, 4, 2, 1, bias=False),
                 norm_layer(curr_ndf),
-                nn.LeakyReLU(0.2, inplace=True)
+                nn.LeakyReLU(0.2, inplace=True),
+                Self_Attn(curr_ndf, 'relu'),
             ]
+
         # now state is _ x 4 x 4
 
         # this layer will downsize it to 1 x 1

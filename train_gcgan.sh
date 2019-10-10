@@ -25,4 +25,5 @@ train.py \
 --lambda_smooth 1 \
 --lambda_crossflow 2 \
 --lambda_radial 0.1 \
---lambda_rot 1 \
+--lambda_rot 0.1 \
+ 
