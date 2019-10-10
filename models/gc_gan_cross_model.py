@@ -129,17 +129,17 @@ class GcGANCrossModel(BaseModel):
         AC GAN loss
         '''
         # Real_clean
-        pred_real, pred_distort = netD(real)
+        pred_real, pred_distort = self.forward_D_basic(netD, real)
         loss_D_real += self.criterionGAN(pred_real, True)
         loss_D_distort += self.criterionBCE(pred_distort, self.false)
 
         # Real_distort
-        pred_real, pred_distort = netD(real2)
+        pred_real, pred_distort = self.forward_D_basic(netD, real2)
         # loss_D_real += self.criterionGAN(pred_real, True)
         loss_D_distort += self.criterionBCE(pred_distort, self.true)
 
         # Fake_clean
-        pred_real, pred_distort = netD(fake)
+        pred_real, pred_distort = self.forward_D_basic(netD, fake)
         loss_D_real += self.criterionGAN(pred_real, False)
         loss_D_distort += self.criterionBCE(pred_distort, self.false)
 
@@ -166,7 +166,7 @@ class GcGANCrossModel(BaseModel):
             return tensor
         return callback
     
-    def get_edge_map(self, tensor, scaling = 2):
+    def get_edge_map(self, tensor, scaling = 1):
         '''
             tensor: A batch of image tensor with shape n, c, h, w.
             scaling: Scaling factor to apply to image before computing edges.
@@ -177,7 +177,7 @@ class GcGANCrossModel(BaseModel):
         n, c, h, w = tensor.shape
         edge_maps = []
         for i in range(n):
-            img = to_grayscale(tensor[i, :, :, :]).numpy()
+            img = to_grayscale(tensor[i, :, :, :]).cpu().detach().numpy()
             if scaling:
                 img = transform.resize(img, (scaling * h, scaling * w), anti_aliasing = True)
             edges = 255 * feature.canny(img, sigma = 2).astype(np.uint8)
@@ -261,15 +261,22 @@ class GcGANCrossModel(BaseModel):
 
         return self.radial_constraint(flow)
     
+    def forward_D_basic(self, netD, _input):
+        # edge = (self.get_edge_map(_input) / 255).cuda()
+        # _input = torch.cat((_input, edge), dim = 1)
+        # print(_input.shape)
+        # input()
+        return netD(_input)
+
     def backward_G(self):
 
         
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
-        pred_real, pred_distort = self.netD_B(fake_B)
+        pred_real, pred_distort = self.forward_D_basic(self.netD_B, fake_B)
         loss_G_AB = ( self.criterionGAN(pred_real, True) + self.criterionBCE(pred_distort, self.false) )*self.opt.lambda_G
 
         fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
-        pred_real, pred_distort = self.netD_gc_B(fake_gc_B)
+        pred_real, pred_distort = self.forward_D_basic(self.netD_gc_B, fake_gc_B)
         loss_G_gc_AB = ( self.criterionGAN(pred_real, True) + self.criterionBCE(pred_distort, self.false) )*self.opt.lambda_G
 
         # Constraints for flow map
@@ -283,25 +290,25 @@ class GcGANCrossModel(BaseModel):
         elif self.opt.geometry == 'vf':
             loss_gc = self.get_gc_vf_loss(fake_B, fake_gc_B) * self.opt.lambda_gc
 
-        if self.opt.identity > 0:
-            # G_AB should be identity if real_B is fed.
-            idt_A, flow = self.forward_G_basic(self.netG_AB, self.real_B)
-            loss_idt = self.criterionIdt(idt_A, self.real_B) * self.opt.lambda_AB * self.opt.identity
-            #loss_s += self.cal_smooth(flow)
+        # if self.opt.identity > 0:
+        #     # G_AB should be identity if real_B is fed.
+        #     idt_A, flow = self.forward_G_basic(self.netG_AB, self.real_B)
+        #     loss_idt = self.criterionIdt(idt_A, self.real_B) * self.opt.lambda_AB * self.opt.identity
+        #     #loss_s += self.cal_smooth(flow)
 
-            idt_gc_A, flow = self.forward_G_basic(self.netG_gc_AB, self.real_gc_B)
-            loss_idt_gc = self.criterionIdt(idt_gc_A, self.real_gc_B) * self.opt.lambda_AB * self.opt.identity
-            #loss_s += self.cal_smooth(flow)
+        #     idt_gc_A, flow = self.forward_G_basic(self.netG_gc_AB, self.real_gc_B)
+        #     loss_idt_gc = self.criterionIdt(idt_gc_A, self.real_gc_B) * self.opt.lambda_AB * self.opt.identity
+        #     #loss_s += self.cal_smooth(flow)
 
-            self.idt_A = idt_A.data
-            self.idt_gc_A = idt_gc_A.data
-            self.loss_idt = loss_idt.item()
-            self.loss_idt_gc = loss_idt_gc.item()
-        else:
-            loss_idt = 0
-            loss_idt_gc = 0
-            self.loss_idt = 0
-            self.loss_idt_gc = 0
+        #     self.idt_A = idt_A.data
+        #     self.idt_gc_A = idt_gc_A.data
+        #     self.loss_idt = loss_idt.item()
+        #     self.loss_idt_gc = loss_idt_gc.item()
+        # else:
+        loss_idt = 0
+        loss_idt_gc = 0
+        self.loss_idt = 0
+        self.loss_idt_gc = 0
 
         loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_radialflow + loss_smooth + loss_rotflow
 
