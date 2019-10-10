@@ -85,6 +85,7 @@ class CycleGANModel(BaseModel):
         self.input_A.resize_(input_A.size()).copy_(input_A)
         self.input_B.resize_(input_B.size()).copy_(input_B)
         self.image_paths = input['B_paths' if AtoB else 'A_paths']
+        self.gt_A = input['BtoA']
 
     def forward(self):
         self.real_A = Variable(self.input_A)
@@ -216,8 +217,9 @@ class CycleGANModel(BaseModel):
         real_B = util.tensor2im(self.input_B)
         fake_A = util.tensor2im(self.fake_A)
         rec_B = util.tensor2im(self.rec_B)
+        gt_A = util.tensor2im(self.gt_A)
         ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('rec_A', rec_A),
-                                   ('real_B', real_B), ('fake_A', fake_A), ('rec_B', rec_B)])
+                                   ('real_B', real_B), ('gt_A', gt_A), ('fake_A', fake_A), ('rec_B', rec_B)])
         if self.opt.isTrain and self.opt.identity > 0.0:
             ret_visuals['idt_A'] = util.tensor2im(self.idt_A)
             ret_visuals['idt_B'] = util.tensor2im(self.idt_B)
