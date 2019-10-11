@@ -26,15 +26,22 @@ def Hough_score(GT, P):
     score = (GT_lmean - P_lmean) / P_lmean
     return score
 
-def evaluate(GT, P):
-    score_rmse = rmse(GT, P)
-    score_psnr = psnr(GT, P)
-    score_ssim = ssim(GT, P)[0]
-    score_hough = Hough_score(GT, P)
+def enlarge_and_crop(img, ratio, size):
+    assert(ratio >= 1.0)
+    resize_img = cv2.resize(img, None, fx=ratio, fy=ratio)
+    h, w, c = resize_img.shape
+    cx, cy = h // 2, w // 2
+    cropped = resize_img[cy - size // 2: cy + size // 2, cx - size // 2: cx + size // 2,]
+    return cropped
 
-    return {
-        'rmse': score_rmse,
-        'psnr': score_psnr,
-        'ssim': score_ssim,
-        'hough': score_hough
-    }
+def evaluate(GT, P):
+
+    score = {'rmse': 1e9, 'psnr': 0, 'ssim': 0, 'hough': 1e9}
+    for ratio in np.arange(1.0, 1.3, 0.05):
+        GT_enlarge = enlarge_and_crop(GT, ratio, 256)
+        score['rmse'] = min(score['rmse'], rmse(GT_enlarge, P))
+        score['psnr'] = max(score['psnr'], psnr(GT_enlarge, P))
+        score['ssim'] = max(score['ssim'], ssim(GT_enlarge, P)[0])
+        score['hough'] = min(score['hough'], Hough_score(GT_enlarge, P))
+    print(score)
+    return score

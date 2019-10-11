@@ -62,7 +62,7 @@ for k, v in ans.items():
 log_name = os.path.join(web_dir, 'score.txt')
 print(log_name)
 
-with open(log_name, "a") as log_file:
+with open(log_name, "w") as log_file:
     log_file.write('%s' % message)
 
 print(message)
