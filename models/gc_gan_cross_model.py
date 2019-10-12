@@ -141,7 +141,8 @@ class GcGANCrossModel(BaseModel):
         # Fake_clean
         pred_real, pred_distort = self.forward_D_basic(netD, fake)
         loss_D_real += self.criterionGAN(pred_real, False)
-        loss_D_distort += self.criterionBCE(pred_distort, self.false)
+        # loss_D_distort += self.criterionBCE(pred_distort, self.false)
+        loss_D_distort += self.criterionBCE(pred_distort, self.true) # adversarial
 
         loss_D = loss_D_real + loss_D_distort
         loss_D.backward()
@@ -198,7 +199,10 @@ class GcGANCrossModel(BaseModel):
         size = self.opt.fineSize
 
         # Randomly choose a rotation degree from {90, 180, 270} and construct transfrom and inv transform fucntion
-        deg = random.randint(1, 3) * 90
+        if self.opt.no_rot:
+            deg = 0
+        else:
+            deg = random.randint(1, 3) * 90
         self.tran = self.rot(deg)
         self.inv_tran = self.rot(360 - deg)
 
@@ -249,17 +253,37 @@ class GcGANCrossModel(BaseModel):
         return -radial_loss
 
     def rotation_constraint(self, flow):
-        flow = flow.permute(0, 3, 1, 2)
-        rot90, rot180, rot270 = self.rot(90), self.rot(180), self.rot(270)
-        rot90_flow = rot90(flow)
-        rot180_flow = rot180(flow)
-        rot270_flow = rot270(flow)
+        total_std = 0
+        flow_len = (flow[:, :, :, 0] ** 2 + flow[:, :, :, 1] ** 2) ** (1 / 2)
 
-        criterion = self.criterionRotFlow
-        rot_loss = criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)
-        return rot_loss
+        n, h, w, c = flow.shape
+        size = h
+        offset = size // 2
+        n_sample = 256
 
-        return self.radial_constraint(flow)
+        rad_list = np.random.uniform(0, (size // 2) * np.sqrt(2), n_sample)
+        deg_list = np.random.uniform(0, 360, n_sample)
+        
+        for r in rad_list:
+            X = (r * np.cos(deg_list) + offset).astype(np.int)
+            Y = (r * np.sin(deg_list) + offset).astype(np.int)
+            indexs = (X >= 0) & (X < size) & (Y >= 0) & (Y < size)
+            X = X[indexs]
+            Y = Y[indexs]
+            if len(X) > 1:
+                total_std += torch.std(flow_len[:, X, Y])
+
+        return total_std
+        
+        # flow = flow.permute(0, 3, 1, 2)
+        # rot90, rot180, rot270 = self.rot(90), self.rot(180), self.rot(270)
+        # rot90_flow = rot90(flow)
+        # rot180_flow = rot180(flow)
+        # rot270_flow = rot270(flow)
+
+        # criterion = self.criterionRotFlow
+        # rot_loss = criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)
+        # return rot_loss
     
     def forward_D_basic(self, netD, _input):
         # edge = (self.get_edge_map(_input) / 255).cuda()
@@ -401,7 +425,7 @@ class GcGANCrossModel(BaseModel):
         fake_B = util.tensor2im(self.fake_B)
         # fake_gc_B = util.tensor2im(self.fake_gc_B)
 
-        
+
         chess_A = F.grid_sample(self.chess, (self.flow_A + self.grid)[0].unsqueeze(0))
         chess_A = util.tensor2im(chess_A.data)
         

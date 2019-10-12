@@ -22,7 +22,7 @@ train.py \
 --GD_share \
 --which_model_netD Fusion \
 --lambda_gc 1 \
---lambda_smooth 1 \
---lambda_crossflow 2 \
---lambda_radial 0.5 \
---lambda_rot 0.1 \
+--lambda_smooth 0 \
+--lambda_crossflow 0 \
+--lambda_radial 0 \
+--lambda_rot 0 \

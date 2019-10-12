@@ -40,4 +40,5 @@ class TrainOptions(BaseOptions):
         
         
         self.parser.add_argument('--no_patch', action='store_true', help="If true, dis only outputs one scalar.")
+        self.parser.add_argument('--no_rot', action='store_true', help="If true, no rotation on input image.")
         self.isTrain = True
