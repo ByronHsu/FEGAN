@@ -8,8 +8,8 @@ train.py \
 --name $2 \
 --model gc_gan_cross \
 --batchSize 4 \
---niter 80 \
---niter_decay 20 \
+--niter 200 \
+--niter_decay 0 \
 --save_epoch_freq 2 \
 --which_direction BtoA \
 --tensorboard \
@@ -22,7 +22,7 @@ train.py \
 --GD_share \
 --which_model_netD Fusion \
 --lambda_gc 1 \
---lambda_smooth 1 \
+--lambda_smooth 2 \
 --lambda_crossflow 2 \
 --lambda_radial 0.5 \
 --lambda_rot 0.1 \
