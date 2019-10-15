@@ -41,7 +41,6 @@ class BaseOptions():
         self.parser.add_argument('--init_type', type=str, default='xavier', help='network initialization [normal|xavier|kaiming|orthogonal]')
         #self.parser.add_argument('--encoder_block', type=int, default='6', help='number of residual blocks for encoder')
         self.parser.add_argument('--use_att', action='store_true', help="Whether to use att in unet")
-        self.parser.add_argument('--GD_share', action='store_true', help='G, D both share the same model')
         self.parser.add_argument('--tensorboard', action='store_true', help="Enable tensorboard.")
         self.parser.add_argument('--upsample_flow', type=float, default = 2, help="Upsample ratio for flow map.")
         self.initialized = True

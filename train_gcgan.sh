@@ -17,9 +17,7 @@ train.py \
 --which_model_netG unet_128 \
 --upsample_flow 2 \
 --use_att \
---geometry rot \
 --identity 0 \
---GD_share \
 --which_model_netD Fusion \
 --lambda_gc 1 \
 --lambda_smooth 2 \

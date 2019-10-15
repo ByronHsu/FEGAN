@@ -13,48 +13,8 @@ from torch.autograd import Variable
 # Functions
 ###############################################################################
 
-class Self_Attn(nn.Module):
-    """ 
-    Self attention Layer
-    source: https://github.com/heykeetae/Self-Attention-GAN/blob/master/sagan_models.py
-    """
-
-    def __init__(self,in_dim,activation):
-        super(Self_Attn,self).__init__()
-        self.chanel_in = in_dim
-        self.activation = activation
-        self.query_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8, kernel_size = 1)#in_dim//8 , kernel_size= 1)
-        self.key_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8, kernel_size = 1)#in_dim//8 , kernel_size= 1)
-        self.value_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim , kernel_size= 1)
-        self.gamma = nn.Parameter(torch.zeros(1))
-
-        self.softmax  = nn.Softmax(dim=-1) #
-    def forward(self,x):
-        """
-            inputs :
-                x : input feature maps( B X C X W X H)
-            returns :
-                out : self attention value + input feature 
-                attention: B X N X N (N is Width*Height)
-        """
-        m_batchsize,C,width ,height = x.size()
-        proj_query  = self.query_conv(x).view(m_batchsize,-1,width*height).permute(0,2,1) # B X CX(N)
-        proj_key =  self.key_conv(x).view(m_batchsize,-1,width*height) # B X C x (*W*H)
-        # print(proj_query.shape, proj_key.shape)
-        energy =  torch.bmm(proj_query,proj_key) # transpose check
-        attention = self.softmax(energy) # BX (N) X (N) 
-        proj_value = self.value_conv(x).view(m_batchsize,-1,width*height) # B X C X N
-
-        out = torch.bmm(proj_value,attention.permute(0,2,1) )
-        out = out.view(m_batchsize,C,width,height)
-        
-        out = self.gamma*out + x
-        # print(attention)
-        return out# ,attention
-
 def weights_init_normal(m):
     classname = m.__class__.__name__
-    # print(classname)
     if classname.find('Conv') != -1:
         init.normal(m.weight.data, 0.0, 0.02)
     elif classname.find('Linear') != -1:
@@ -66,7 +26,6 @@ def weights_init_normal(m):
 
 def weights_init_xavier(m):
     classname = m.__class__.__name__
-    # print(classname)
     if classname.find('Conv') != -1:
         init.xavier_normal(m.weight.data, gain=0.02)
     elif classname.find('Linear') != -1:
@@ -78,7 +37,6 @@ def weights_init_xavier(m):
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
-    # print(classname)
     if classname.find('Conv') != -1:
         init.kaiming_normal(m.weight.data, a=0, mode='fan_in')
     elif classname.find('Linear') != -1:
@@ -90,7 +48,6 @@ def weights_init_kaiming(m):
 
 def weights_init_orthogonal(m):
     classname = m.__class__.__name__
-    print(classname)
     if classname.find('Conv') != -1:
         init.orthogonal(m.weight.data, gain=1)
     elif classname.find('Linear') != -1:
@@ -158,8 +115,6 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, gpu_ids=gpu_ids)
     elif which_model_netG == 'resnet_6blocks':
         netG = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6, gpu_ids=gpu_ids)
-    elif which_model_netG == 'unet_64':
-        netG = UnetGenerator(input_nc, output_nc, 6, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_att=use_att, gpu_ids=gpu_ids)
     elif which_model_netG == 'unet_128':
         netG = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout, use_att=use_att, gpu_ids=gpu_ids)
     elif which_model_netG == 'unet_256':
@@ -173,16 +128,14 @@ def define_G(input_nc, output_nc, ngf, which_model_netG, norm='batch', use_dropo
 
 
 def define_D(input_nc, ndf, size, which_model_netD,
-             n_layers_D=3, norm='batch', use_sigmoid=False, no_patch=False, init_type='normal', gpu_ids=[], use_att=False):
+             n_layers_D=3, norm='batch', use_sigmoid=False, init_type='normal', gpu_ids=[], use_att=False):
     netD = None
     use_gpu = len(gpu_ids) > 0
     norm_layer = get_norm_layer(norm_type=norm)
 
     if use_gpu:
         assert(torch.cuda.is_available())
-    if which_model_netD == '6_layer':
-        netD = NLayerDiscriminator(input_nc, ndf, n_layers=5, norm_layer=norm_layer, use_sigmoid=use_sigmoid, no_patch=no_patch, gpu_ids=gpu_ids)
-    elif which_model_netD == 'basic':
+    if which_model_netD == 'basic':
         netD = NLayerDiscriminator(input_nc, ndf, n_layers=3, norm_layer=norm_layer, use_sigmoid=use_sigmoid, no_patch=no_patch, gpu_ids=gpu_ids)
     elif which_model_netD == 'n_layers':
         netD = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_sigmoid=use_sigmoid, no_patch=no_patch, gpu_ids=gpu_ids)
@@ -213,6 +166,43 @@ def print_network(net):
 # Classes
 ##############################################################################
 
+
+class Self_Attn(nn.Module):
+    """ 
+    Self attention Layer
+    source: https://github.com/heykeetae/Self-Attention-GAN/blob/master/sagan_models.py
+    """
+
+    def __init__(self,in_dim,activation):
+        super(Self_Attn,self).__init__()
+        self.chanel_in = in_dim
+        self.activation = activation
+        self.query_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8, kernel_size = 1)#in_dim//8 , kernel_size= 1)
+        self.key_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8, kernel_size = 1)#in_dim//8 , kernel_size= 1)
+        self.value_conv = nn.Conv2d(in_channels = in_dim , out_channels = in_dim , kernel_size= 1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+        self.softmax  = nn.Softmax(dim=-1) #
+    def forward(self,x):
+        """
+            inputs :
+                x : input feature maps( B X C X W X H)
+            returns :
+                out : self attention value + input feature 
+                attention: B X N X N (N is Width*Height)
+        """
+        m_batchsize,C,width ,height = x.size()
+        proj_query  = self.query_conv(x).view(m_batchsize,-1,width*height).permute(0,2,1) # B X CX(N)
+        proj_key =  self.key_conv(x).view(m_batchsize,-1,width*height) # B X C x (*W*H)
+        energy =  torch.bmm(proj_query,proj_key) # transpose check
+        attention = self.softmax(energy) # BX (N) X (N) 
+        proj_value = self.value_conv(x).view(m_batchsize,-1,width*height) # B X C X N
+
+        out = torch.bmm(proj_value,attention.permute(0,2,1) )
+        out = out.view(m_batchsize,C,width,height)
+        
+        out = self.gamma*out + x
+        return out# ,attention
 
 # Defines the GAN loss which uses either LSGAN or the regular GAN.
 # When LSGAN is used, it is basically same as MSELoss,
@@ -448,10 +438,9 @@ class UnetSkipConnectionBlock(nn.Module):
 
 # Defines the PatchGAN discriminator with the specified arguments.
 class NLayerDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, no_patch=False, gpu_ids=[]):
+    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[]):
         super(NLayerDiscriminator, self).__init__()
         self.gpu_ids = gpu_ids
-        self.no_patch = no_patch
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
@@ -478,117 +467,39 @@ class NLayerDiscriminator(nn.Module):
 
         nf_mult_prev = nf_mult
         nf_mult = min(2**n_layers, 8)
+        sequence += [
+            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
+                      kernel_size=kw, stride=1, padding=padw, bias=use_bias),
+            norm_layer(ndf * nf_mult),
+            nn.LeakyReLU(0.2, True)
+        ]
 
-        if no_patch:
-            sequence += [
-                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
-                        kernel_size=kw, stride=2, padding=padw, bias=use_bias),
-                norm_layer(ndf * nf_mult),
-                nn.LeakyReLU(0.2, True)
-            ]
-        else:
-            sequence += [
-                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
-                        kernel_size=kw, stride=1, padding=padw, bias=use_bias),
-                norm_layer(ndf * nf_mult),
-                nn.LeakyReLU(0.2, True)
-            ]
-            sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]
-        
+        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]
+
         if use_sigmoid:
             sequence += [nn.Sigmoid()]
 
         self.model = nn.Sequential(*sequence)
-        # This FCN is a modified version to the original PatchGAN.
-        self.fc = nn.Sequential(
-            nn.Linear(512 * 8 * 8, 1024),
-            nn.Linear(1024, 1)
-        )
-    def forward(self, _input):
-        if len(self.gpu_ids) and isinstance(_input.data, torch.cuda.FloatTensor):
-            out = nn.parallel.data_parallel(self.model, _input, self.gpu_ids)
-            if self.no_patch:
-                out = out.reshape(_input.shape[0], -1)
-                out = self.fc(out)
-            return out
-        else:
-            return self.model(_input)
-
-class DCGANDiscriminator(nn.Module):
-    def __init__(self, input_nc, size=256, ndf=64, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[]):
-        super(DCGANDiscriminator, self).__init__()
-        self.gpu_ids = gpu_ids
-
-        sequence = []
-        sequence += [
-            # input is (nc) x size x size
-            nn.Conv2d(input_nc, ndf, 4, 2, 1, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-        ]
-        # now state is ndf x (size // 2) x (size // 2)
-        # we need to downsize (size // 2) x (size // 2) to 4 x 4
-        _iter = int(math.log((size // 8), 2)) # calculate how mamy times needed to iterate
-        prev_ndf = ndf
-        curr_ndf = ndf
-        for i in range(_iter):
-            prev_ndf = curr_ndf
-            curr_ndf = min(prev_ndf * 2, ndf * 8)
-            sequence += [
-                nn.Conv2d(prev_ndf, curr_ndf, 4, 2, 1, bias=False),
-                norm_layer(curr_ndf),
-                nn.LeakyReLU(0.2, inplace=True)
-            ]
-        
-        # now state is _ x 4 x 4
-        # this layer will downsize it to 1 x 1
-        sequence += [
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)
-        ]
-        self.main = nn.Sequential(*sequence)
-
-    def forward(self, input):
-        if input.is_cuda and len(self.gpu_ids) > 1:
-            output = nn.parallel.data_parallel(self.main, input, self.gpu_ids)
-        else:
-            output = self.main(input)
-
-        return output.view(-1, 1)
-class PixelDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[]):
-        super(PixelDiscriminator, self).__init__()
-        self.gpu_ids = gpu_ids
-        if type(norm_layer) == functools.partial:
-            use_bias = norm_layer.func == nn.InstanceNorm2d
-        else:
-            use_bias = norm_layer == nn.InstanceNorm2d
-            
-        self.net = [
-            nn.Conv2d(input_nc, ndf, kernel_size=1, stride=1, padding=0),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(ndf, ndf * 2, kernel_size=1, stride=1, padding=0, bias=use_bias),
-            norm_layer(ndf * 2),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(ndf * 2, 1, kernel_size=1, stride=1, padding=0, bias=use_bias)]
-
-        if use_sigmoid:
-            self.net.append(nn.Sigmoid())
-
-        self.net = nn.Sequential(*self.net)
 
     def forward(self, input):
         if len(self.gpu_ids) and isinstance(input.data, torch.cuda.FloatTensor):
-            return nn.parallel.data_parallel(self.net, input, self.gpu_ids)
+            return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
         else:
-            return self.net(input)
+            return self.model(input)
 
 class FusionDiscriminator(nn.Module):
     def __init__(self, input_nc, size=256, ndf=64, n_layer = 3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, gpu_ids=[], use_att = False):
         '''
-        Output 1. real/fake, 2. class
-        Both Gen and Dis needs to minimize class loss
+        Output 
+        1. real/fake (Use patch gan)
+        2. class (Only output one scaler)
         '''
         super(FusionDiscriminator, self).__init__()
         self.gpu_ids = gpu_ids
+
+        # ===============
+        # Shared Layer
+        # ===============
 
         sequence = []
         sequence += [

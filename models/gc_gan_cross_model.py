@@ -37,17 +37,14 @@ class GcGANCrossModel(BaseModel):
 
         self.netG_AB = networks.define_G(opt.input_nc, flow_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.use_att, self.gpu_ids)
-        
-        if opt.GD_share:
-            self.netG_gc_AB = self.netG_AB # share
-        else:
-            self.netG_gc_AB = networks.define_G(opt.input_nc, flow_nc, opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.use_att, self.gpu_ids)
+        self.netG_gc_AB = self.netG_AB # share G_gc and G
+
         
         self.true = torch.ones((nb, 1)).cuda()
         self.false = torch.zeros((nb, 1)).cuda()
-
-                
-        img_path = os.path.join(os.getcwd(), 'chessboard.jpg')
+        
+        # read chessboard
+        img_path = os.path.join('./util/chessboard.jpg')
         img = Image.open(img_path)
         
         transform1 = transforms.Compose([
@@ -61,13 +58,8 @@ class GcGANCrossModel(BaseModel):
             use_sigmoid = opt.no_lsgan
             self.netD_B = networks.define_D(opt.output_nc, opt.ndf, size,
                                             opt.which_model_netD,
-                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids, opt.use_att)
-            if opt.GD_share:
-                self.netD_gc_B = self.netD_B
-            else:
-                self.netD_gc_B = networks.define_D(opt.output_nc, opt.ndf, size,
-                                                opt.which_model_netD,
-                                                opt.n_layers_D, opt.norm, use_sigmoid, opt.no_patch, opt.init_type, self.gpu_ids, opt.use_att)
+                                            opt.n_layers_D, opt.norm, use_sigmoid, opt.init_type, self.gpu_ids, opt.use_att)
+            self.netD_gc_B = self.netD_B  # share D_B and D_gc_B
 
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
@@ -81,22 +73,18 @@ class GcGANCrossModel(BaseModel):
             self.old_lr = opt.lr
             self.fake_B_pool = ImagePool(opt.pool_size)
             self.fake_gc_B_pool = ImagePool(opt.pool_size)
-            # define loss functions
 
+            # define loss functions
             self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor)
             self.criterionBCE = torch.nn.BCEWithLogitsLoss()
             self.criterionIdt = torch.nn.L1Loss()
             self.criterionGc = torch.nn.L1Loss()
             self.criterionCrossFlow = torch.nn.L1Loss()
             self.criterionRotFlow = torch.nn.L1Loss()
-            # initialize optimizers
             
-            if opt.GD_share:
-                self.optimizer_G = torch.optim.Adam((self.netG_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-                self.optimizer_D_B = torch.optim.Adam((self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            else:
-                self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_AB.parameters(), self.netG_gc_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-                self.optimizer_D_B = torch.optim.Adam(itertools.chain(self.netD_B.parameters(), self.netD_gc_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            # initialize optimizers            
+            self.optimizer_G = torch.optim.Adam((self.netG_AB.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_D_B = torch.optim.Adam((self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
 
             self.optimizers = []
             self.schedulers = []
@@ -117,8 +105,8 @@ class GcGANCrossModel(BaseModel):
         AtoB = self.opt.which_direction == 'AtoB'
         input_A = input['A' if AtoB else 'B']
         input_B = input['B' if AtoB else 'A']
-        self.gt_B = input['BtoA']
-
+        
+        self.gt_B = input['BtoA'] # The ground truth image of domain B
         self.input_A.resize_(input_A.size()).copy_(input_A)
         self.input_B.resize_(input_B.size()).copy_(input_B)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
@@ -126,7 +114,7 @@ class GcGANCrossModel(BaseModel):
     def backward_D_basic(self, netD, real, fake, real2):
         loss_D_real, loss_D_distort = 0, 0
         '''
-        AC GAN loss
+        Similar to ACGAN loss, but we train the classifier adversarially
         '''
         # Real_clean
         pred_real, pred_distort = self.forward_D_basic(netD, real)
@@ -152,10 +140,10 @@ class GcGANCrossModel(BaseModel):
         return self.image_paths
 
     def rot(self, deg):
-        """
+        '''
         Rotate image clockwisely by "deg" degree.
         Return callback function rather than value.
-        """
+        '''
         def callback(tensor):
             size = self.opt.fineSize
             inv_idx = torch.arange(size-1, -1, -1).long().cuda()
@@ -166,28 +154,6 @@ class GcGANCrossModel(BaseModel):
                 tensor = torch.index_select(tensor, 3, inv_idx)
             return tensor
         return callback
-    
-    def get_edge_map(self, tensor, scaling = 1):
-        '''
-            tensor: A batch of image tensor with shape n, c, h, w.
-            scaling: Scaling factor to apply to image before computing edges.
-        '''
-        #h, w = img.shape[0], img.shape[1]
-        def to_grayscale(img):
-            return img[0, :, :] * 0.2126 + img[1, :, :] * 0.7152 + img[2, :, :] * 0.0722
-        n, c, h, w = tensor.shape
-        edge_maps = []
-        for i in range(n):
-            img = to_grayscale(tensor[i, :, :, :]).cpu().detach().numpy()
-            if scaling:
-                img = transform.resize(img, (scaling * h, scaling * w), anti_aliasing = True)
-            edges = 255 * feature.canny(img, sigma = 2).astype(np.uint8)
-            if scaling:
-                edges = transform.resize(edges, (h, w), anti_aliasing = True, preserve_range = True).astype(np.uint8)
-                edges = cv2.equalizeHist(edges)
-                # edges = (edges != 0) * 255
-            edge_maps.append(torch.tensor(edges, dtype = torch.float).unsqueeze(0).unsqueeze(0))
-        return torch.cat(tuple(edge_maps), dim = 0)
 
     def forward(self):
         input_A = self.input_A.clone()
@@ -203,31 +169,34 @@ class GcGANCrossModel(BaseModel):
             deg = 0
         else:
             deg = random.randint(1, 3) * 90
+        
         self.tran = self.rot(deg)
         self.inv_tran = self.rot(360 - deg)
 
-        if self.opt.geometry == 'rot':
-          self.real_gc_A = self.tran(input_A)
-          self.real_gc_B = self.tran(input_B)
-        elif self.opt.geometry == 'vf':
-          inv_idx = torch.arange(size-1, -1, -1).long().cuda()
-          self.real_gc_A = torch.index_select(input_A, 2, inv_idx)
-          self.real_gc_B = torch.index_select(input_B, 2, inv_idx)
-        else:
-          raise ValueError("Geometry transformation function [%s] not recognized." % self.opt.geometry)
+        self.real_gc_A = self.tran(input_A)
+        self.real_gc_B = self.tran(input_B)
         
     def forward_G_basic(self, netG, real):
+        '''
+            Forward netG once.
+            We downsample the real image, and then put it into the netG.
+            After, we upsample the flow generated by netG back to the same size as the original real image.
+        '''
+        # downsampling
         real_down = F.interpolate(real, scale_factor=1 / self.opt.upsample_flow)
         flow = netG.forward(real_down)
+        # upsampling
         flow = F.interpolate(flow, scale_factor=self.opt.upsample_flow).permute(0, 2, 3, 1)
+        # construct offset grid
         self.theta = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]).repeat(self.input_A.shape[0], 1, 1)
         self.grid = F.affine_grid(self.theta, self.input_A.shape).cuda() 
+        # warp the real image by flow
         fake = F.grid_sample(real, flow + self.grid, padding_mode="zeros")
         return (fake, flow)
     
     def cal_smooth(self, flow):
         '''
-            Smooth constraint for flow map
+            Smooth constraint for flow map.
         '''
         gx = torch.abs(flow[:, :, :, :-1] - flow[:, :, :, 1:])  # NCHW
         gy = torch.abs(flow[:, :, :-1, :] - flow[:, :, 1:, :])  # NCHW
@@ -236,23 +205,29 @@ class GcGANCrossModel(BaseModel):
     
     def radial_constraint(self, flow):
         '''
-            Flow map has dimension (n, h, w, 2).
+            Radial constraint for flow map.
+            The flow should point inward or outward to the center.
         '''
         n, h, w, _ = flow.shape
+        # construct meshgrid
         x = torch.arange(0, h, dtype = torch.float).unsqueeze(1).repeat(1, w) - (h - 1) / 2
         y = torch.arange(0, w, dtype = torch.float).unsqueeze(0).repeat(h, 1) - (w - 1) / 2
         v = torch.cat((y.unsqueeze(2), x.unsqueeze(2)), dim = 2).unsqueeze(0).repeat(n, 1, 1, 1).cuda()
         
         v = v.view(n, h*w, 2)
         flow = flow.view(n, h*w, 2)
-        
+        # calcuate consine similarity of the flow and the mesh grid . 
         cos = torch.nn.CosineSimilarity(dim=1, eps=1e-6)
         cos_similarity = torch.abs(cos(v, flow)) # May point to same or negative direction
-        # cos_similarity = F.leaky_relu(cos(v, flow), negative_slope=0.6)
         radial_loss = torch.mean(cos_similarity)
         return -radial_loss
 
-    def rotation_constraint(self, flow):
+    def circle_constraint(self, flow):
+        '''
+            Convert the map the polar axis, and then sample some radius and degree.
+            For the points on the same circle, the should have the same length of flow.
+            We need to minimize the variance of the length of flow on each circle.
+        '''
         total_std = 0
         flow_len = (flow[:, :, :, 0] ** 2 + flow[:, :, :, 1] ** 2) ** (1 / 2)
 
@@ -267,6 +242,7 @@ class GcGANCrossModel(BaseModel):
         for r in rad_list:
             X = (r * np.cos(deg_list) + offset).astype(np.int)
             Y = (r * np.sin(deg_list) + offset).astype(np.int)
+            # ensure it is in the range
             indexs = (X >= 0) & (X < size) & (Y >= 0) & (Y < size)
             X = X[indexs]
             Y = Y[indexs]
@@ -274,27 +250,11 @@ class GcGANCrossModel(BaseModel):
                 total_std += torch.std(flow_len[:, X, Y])
 
         return total_std
-        
-        # flow = flow.permute(0, 3, 1, 2)
-        # rot90, rot180, rot270 = self.rot(90), self.rot(180), self.rot(270)
-        # rot90_flow = rot90(flow)
-        # rot180_flow = rot180(flow)
-        # rot270_flow = rot270(flow)
-
-        # criterion = self.criterionRotFlow
-        # rot_loss = criterion(flow, rot90_flow) + criterion(flow, rot180_flow) + criterion(flow, rot270_flow)
-        # return rot_loss
     
     def forward_D_basic(self, netD, _input):
-        # edge = (self.get_edge_map(_input) / 255).cuda()
-        # _input = torch.cat((_input, edge), dim = 1)
-        # print(_input.shape)
-        # input()
         return netD(_input)
 
     def backward_G(self):
-
-        
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
         pred_real, pred_distort = self.forward_D_basic(self.netD_B, fake_B)
         loss_G_AB = ( self.criterionGAN(pred_real, True) + self.criterionBCE(pred_distort, self.false) )*self.opt.lambda_G
@@ -307,34 +267,12 @@ class GcGANCrossModel(BaseModel):
         loss_crossflow = self.criterionCrossFlow(flow_A, flow_gc_A)*self.opt.lambda_crossflow
         loss_smooth = (self.cal_smooth(flow_A) + self.cal_smooth(flow_gc_A)) * self.opt.lambda_smooth
         loss_radialflow = (self.radial_constraint(flow_A) + self.radial_constraint(flow_gc_A)) * self.opt.lambda_radial
-        loss_rotflow = (self.rotation_constraint(flow_A) + self.rotation_constraint(flow_gc_A)) * self.opt.lambda_rot
+        loss_rotflow = (self.circle_constraint(flow_A) + self.circle_constraint(flow_gc_A)) * self.opt.lambda_rot
         
-        if self.opt.geometry == 'rot':
-            loss_gc = self.get_gc_rot_loss(fake_B, fake_gc_B, 0) * self.opt.lambda_gc
-        elif self.opt.geometry == 'vf':
-            loss_gc = self.get_gc_vf_loss(fake_B, fake_gc_B) * self.opt.lambda_gc
+        # Geometry constraint
+        loss_gc = self.get_gc_rot_loss(fake_B, fake_gc_B, 0) * self.opt.lambda_gc
 
-        # if self.opt.identity > 0:
-        #     # G_AB should be identity if real_B is fed.
-        #     idt_A, flow = self.forward_G_basic(self.netG_AB, self.real_B)
-        #     loss_idt = self.criterionIdt(idt_A, self.real_B) * self.opt.lambda_AB * self.opt.identity
-        #     #loss_s += self.cal_smooth(flow)
-
-        #     idt_gc_A, flow = self.forward_G_basic(self.netG_gc_AB, self.real_gc_B)
-        #     loss_idt_gc = self.criterionIdt(idt_gc_A, self.real_gc_B) * self.opt.lambda_AB * self.opt.identity
-        #     #loss_s += self.cal_smooth(flow)
-
-        #     self.idt_A = idt_A.data
-        #     self.idt_gc_A = idt_gc_A.data
-        #     self.loss_idt = loss_idt.item()
-        #     self.loss_idt_gc = loss_idt_gc.item()
-        # else:
-        loss_idt = 0
-        loss_idt_gc = 0
-        self.loss_idt = 0
-        self.loss_idt_gc = 0
-
-        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_idt + loss_idt_gc + loss_crossflow + loss_radialflow + loss_smooth + loss_rotflow
+        loss_G = loss_G_AB + loss_G_gc_AB + loss_gc + loss_crossflow + loss_radialflow + loss_smooth + loss_rotflow
 
         loss_G.backward()
 
@@ -360,22 +298,6 @@ class GcGANCrossModel(BaseModel):
         AB_gc_gt = self.tran(AB.clone().detach())
         loss_gc += self.criterionGc(AB_gc, AB_gc_gt)
 
-        loss_gc = loss_gc*self.opt.lambda_AB*self.opt.lambda_gc
-        return loss_gc
-
-    def get_gc_vf_loss(self, AB, AB_gc):
-        loss_gc = 0.0
-
-        size = self.opt.fineSize
-
-        inv_idx = torch.arange(size-1, -1, -1).long().cuda()
-
-        AB_gt = torch.index_select(AB_gc.clone().detach(), 2, inv_idx)
-        loss_gc = self.criterionGc(AB, AB_gt)
-        
-        AB_gc_gt = torch.index_select(AB.clone().detach(), 2, inv_idx)
-        loss_gc += self.criterionGc(AB_gc, AB_gc_gt)
-        
         loss_gc = loss_gc*self.opt.lambda_AB*self.opt.lambda_gc
         return loss_gc
 
@@ -409,31 +331,19 @@ class GcGANCrossModel(BaseModel):
                                   ('Gc', self.loss_gc), ('G_gc_AB', self.loss_G_gc_AB), ('Smooth', self.loss_smooth),
                                   ('Crossflow', self.loss_crossflow), ('Radial-flow', self.loss_radialflow), 
                                   ('Rotation-flow', self.loss_rotflow)])
-
-        if self.opt.identity > 0.0:
-            ret_errors['idt'] = self.loss_idt
-            ret_errors['idt_gc'] = self.loss_idt_gc
-            
         return ret_errors
 
     def get_current_visuals(self):
         real_A = util.tensor2im(self.real_A.data)
-        # real_B = util.tensor2im(self.real_B.data)
-        # real_gc_A = util.tensor2im(self.real_gc_A.data)
         gt_B = util.tensor2im(self.gt_B.data)
-
         fake_B = util.tensor2im(self.fake_B)
-        # fake_gc_B = util.tensor2im(self.fake_gc_B)
-
 
         chess_A = F.grid_sample(self.chess, (self.flow_A + self.grid)[0].unsqueeze(0))
         chess_A = util.tensor2im(chess_A.data)
         
-        flow_map = plot_quiver(self.flow_A[0])# use clamp to avoid too large/small value ruins the relative scale
-        # print(self.flow_A[0] + self.grid[0])
+        flow_map = plot_quiver(self.flow_A[0])
         ret_visuals = OrderedDict([('real_A', real_A), ('fake_B', fake_B), ('gt_B', gt_B), ('chess_A', chess_A), ('flow_map', flow_map)])
         self.ret_visuals = ret_visuals
-
         return ret_visuals
  
     def save(self, label):
@@ -444,11 +354,6 @@ class GcGANCrossModel(BaseModel):
 
     def test(self):
         self.real_A = Variable(self.input_A)
-        # self.real_gc_A = self.trans(self.input_A)
-        # self.real_B = Variable(self.input_B)
-        
         fake_B, flow_A = self.forward_G_basic(self.netG_AB, self.real_A)
-        # fake_gc_B, flow_gc_A = self.forward_G_basic(self.netG_gc_AB, self.real_gc_A)
         self.flow_A = flow_A
         self.fake_B = fake_B.data
-        # self.fake_gc_B = fake_gc_B.data
