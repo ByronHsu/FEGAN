@@ -4,3 +4,4 @@ datasets/
 results/
 runs/
 .vscode/
+.DS_Store
